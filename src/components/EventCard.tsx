@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Heart, MessageCircle, Calendar, Clock, MapPin, Users, CheckCircle, Send, MoreHorizontal, UserPlus } from 'lucide-react';
+import { getAvatarColor } from '../utils/anonymousName';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Collapsible, CollapsibleContent } from './ui/collapsible';
 import { useData, type Event } from '../utils/dataContext';
@@ -15,6 +15,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { EventLocationMap } from './EventLocationMap';
+import { EditEventDialog } from './EditEventDialog';
 
 interface EventCardProps {
   event: Event;
@@ -27,6 +29,7 @@ export function EventCard({ event }: EventCardProps) {
     addCommentToEvent,
     toggleRSVPEvent,
     deleteEvent,
+    updateEvent,
     isEventLiked,
     hasRSVPed: hasUserRSVPed
   } = useData();
@@ -34,8 +37,7 @@ export function EventCard({ event }: EventCardProps) {
   
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState('');
-  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [messageText, setMessageText] = useState('');
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   const isLiked = isEventLiked(event.id);
   const hasRSVPed = hasUserRSVPed(event.id);
@@ -84,13 +86,8 @@ export function EventCard({ event }: EventCardProps) {
     toast.success('Event deleted');
   };
 
-  const handleContactHost = () => {
+  const handleContactHost = async () => {
     if (!user || isOwnEvent) return;
-    setIsMessageModalOpen(true);
-  };
-
-  const handleSendMessage = async () => {
-    if (!messageText.trim() || !user) return;
     try {
       const conversationId = await getOrCreateConversation(
         event.authorId,
@@ -101,21 +98,20 @@ export function EventCard({ event }: EventCardProps) {
         toast.error('Could not start conversation. Please try again.');
         return;
       }
-      sendMessage(conversationId, messageText.trim());
-      setIsMessageModalOpen(false);
-      setMessageText('');
-      window.location.hash = '#messages';
+      window.dispatchEvent(new CustomEvent('openChat', { detail: { conversationId } }));
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to send message. Please try again.');
+      console.error('[handleContactHost]', err);
+      toast.error(err?.message || 'Failed to start conversation. Please try again.');
     }
   };
 
   return (
+    <>
     <div className="border-b border-[#f0f0f0] px-4 py-4 hover:bg-[#fafafa] transition-colors">
       <div className="flex gap-3">
         {/* Avatar/Icon */}
         <div className="flex-shrink-0">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-600 to-blue-500 flex items-center justify-center text-white text-sm">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm" style={{ background: getAvatarColor(event.authorId) }}>
             <Calendar className="w-5 h-5" strokeWidth={2} />
           </div>
         </div>
@@ -142,8 +138,16 @@ export function EventCard({ event }: EventCardProps) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
+                  {isOwnEvent && (
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() => setIsEditOpen(true)}
+                    >
+                      Edit event
+                    </DropdownMenuItem>
+                  )}
                   {(isOwnEvent || isAdmin) && (
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       className="cursor-pointer text-red-600 focus:text-red-600"
                       onClick={handleDeleteEvent}
                     >
@@ -189,6 +193,19 @@ export function EventCard({ event }: EventCardProps) {
                 src={event.image}
                 alt={event.title}
                 className="w-full h-auto object-cover max-h-[400px]"
+              />
+            </div>
+          )}
+
+          {/* Map (shown when the event has GPS coordinates) */}
+          {event.locationLat !== undefined && event.locationLng !== undefined && (
+            <div className="mb-3">
+              <EventLocationMap
+                lat={event.locationLat}
+                lng={event.locationLng}
+                locationName={event.locationName}
+                locationAddress={event.locationAddress}
+                radiusMeters={event.locationRadiusMeters ?? 300}
               />
             </div>
           )}
@@ -252,7 +269,7 @@ export function EventCard({ event }: EventCardProps) {
             <CollapsibleContent className="mt-4 space-y-3">
               {/* Add Comment Input */}
               <div className="flex gap-2 pt-3 border-t border-[#f0f0f0]">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0" style={{ background: getAvatarColor(user?.id || '') }}>
                   {user?.name?.charAt(0) || 'A'}
                 </div>
                 <div className="flex-1 flex gap-2">
@@ -286,7 +303,7 @@ export function EventCard({ event }: EventCardProps) {
                     const isOwnComment = user?.id === comment.authorId;
                     return (
                       <div key={comment.id} className="flex gap-2 mt-[0px] mr-[0px] mb-[12px] ml-[-8px]">
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-500 to-gray-700 flex items-center justify-center text-white text-xs font-medium flex-shrink-0 mx-[0px] my-[3px]">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0 mx-[0px] my-[3px]" style={{ background: getAvatarColor(comment.authorId) }}>
                           {comment.author.charAt(0)}
                         </div>
                         
@@ -318,5 +335,24 @@ export function EventCard({ event }: EventCardProps) {
         </div>
       </div>
     </div>
+
+    {/* Edit event dialog — only rendered when the author opens it */}
+    {isEditOpen && (
+      <EditEventDialog
+        open={isEditOpen}
+        onOpenChange={setIsEditOpen}
+        event={event}
+        onSubmit={async (updates) => {
+          try {
+            await updateEvent(event.id, updates);
+            setIsEditOpen(false);
+            toast.success('Event updated!');
+          } catch (err: any) {
+            toast.error(err?.message || 'Failed to update event');
+          }
+        }}
+      />
+    )}
+    </>
   );
 }

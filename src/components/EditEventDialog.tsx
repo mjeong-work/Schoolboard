@@ -13,6 +13,7 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Upload, X } from 'lucide-react';
 import { LocationAutocomplete, type LocationData } from './LocationAutocomplete';
+import type { Event } from '../utils/dataContext';
 
 const TIME_SLOTS = [
   '8:00 AM', '8:30 AM', '9:00 AM', '9:30 AM',
@@ -25,16 +26,17 @@ const TIME_SLOTS = [
   '10:00 PM',
 ];
 
-interface CreateEventDialogProps {
+interface EditEventDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (event: {
+  event: Event;
+  onSubmit: (updates: {
     title: string;
     date: string;
     time: string;
     venue: string;
     description: string;
-    image?: string;
+    image?: string | null;
     category?: string;
     locationName?: string;
     locationAddress?: string;
@@ -44,26 +46,22 @@ interface CreateEventDialogProps {
   }) => void;
 }
 
-const EMPTY_LOCATION: LocationData = { displayText: '' };
-
-export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventDialogProps) {
-  const [title, setTitle] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
-  const [locationData, setLocationData] = useState<LocationData>(EMPTY_LOCATION);
-  const [category, setCategory] = useState('Academic');
-  const [description, setDescription] = useState('');
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-
-  const resetForm = () => {
-    setTitle('');
-    setDate('');
-    setTime('');
-    setLocationData(EMPTY_LOCATION);
-    setCategory('Academic');
-    setDescription('');
-    setUploadedImage(null);
-  };
+export function EditEventDialog({ open, onOpenChange, event, onSubmit }: EditEventDialogProps) {
+  const [title, setTitle] = useState(event.title);
+  const [date, setDate] = useState(event.date);
+  const [time, setTime] = useState(event.time);
+  const [category, setCategory] = useState(event.category || 'Academic');
+  const [description, setDescription] = useState(event.description);
+  const [uploadedImage, setUploadedImage] = useState<string | null>(event.image || null);
+  const [locationData, setLocationData] = useState<LocationData>({
+    // Prefer structured location name; fall back to plain venue text
+    displayText: event.locationName || event.venue,
+    locationName: event.locationName,
+    locationAddress: event.locationAddress,
+    locationLat: event.locationLat,
+    locationLng: event.locationLng,
+    googlePlaceId: event.googlePlaceId,
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +76,7 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
       time,
       venue: locationData.displayText.trim(),
       description: description.trim(),
-      image: uploadedImage || undefined,
+      image: uploadedImage,
       category,
       locationName: locationData.locationName,
       locationAddress: locationData.locationAddress,
@@ -86,9 +84,6 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
       locationLng: locationData.locationLng,
       googlePlaceId: locationData.googlePlaceId,
     });
-
-    resetForm();
-    onOpenChange(false);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,15 +97,6 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
     }
   };
 
-  const handleRemoveImage = () => {
-    setUploadedImage(null);
-  };
-
-  const handleCancel = () => {
-    resetForm();
-    onOpenChange(false);
-  };
-
   const isSubmitDisabled =
     !title.trim() || !date || !time || !locationData.displayText.trim() || !description.trim();
 
@@ -118,20 +104,20 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-[#111]">Create New Event</DialogTitle>
+          <DialogTitle className="text-[#111]">Edit Event</DialogTitle>
           <DialogDescription className="text-[#666]">
-            Share your event with the Campus Connect community
+            Update your event details
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           {/* Title */}
           <div>
-            <Label htmlFor="event-title" className="text-[#666] mb-1.5 block">
+            <Label htmlFor="edit-event-title" className="text-[#666] mb-1.5 block">
               Event Title *
             </Label>
             <Input
-              id="event-title"
+              id="edit-event-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Enter event title..."
@@ -143,11 +129,11 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
           {/* Date and Time */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="event-date" className="text-[#666] mb-1.5 block">
+              <Label htmlFor="edit-event-date" className="text-[#666] mb-1.5 block">
                 Date *
               </Label>
               <Input
-                id="event-date"
+                id="edit-event-date"
                 type="date"
                 value={date}
                 min={new Date().toLocaleDateString('en-CA')}
@@ -158,11 +144,11 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
             </div>
 
             <div>
-              <Label htmlFor="event-time" className="text-[#666] mb-1.5 block">
+              <Label htmlFor="edit-event-time" className="text-[#666] mb-1.5 block">
                 Time *
               </Label>
               <Select value={time} onValueChange={setTime}>
-                <SelectTrigger id="event-time" className="border-[#e5e7eb] rounded-lg">
+                <SelectTrigger id="edit-event-time" className="border-[#e5e7eb] rounded-lg">
                   <SelectValue placeholder="Select a time..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -176,11 +162,11 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
 
           {/* Venue with Google Maps Autocomplete */}
           <div>
-            <Label htmlFor="event-venue" className="text-[#666] mb-1.5 block">
+            <Label htmlFor="edit-event-venue" className="text-[#666] mb-1.5 block">
               Venue *
             </Label>
             <LocationAutocomplete
-              id="event-venue"
+              id="edit-event-venue"
               value={locationData}
               onChange={setLocationData}
               placeholder="Search for a venue or address..."
@@ -190,11 +176,11 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
 
           {/* Category */}
           <div>
-            <Label htmlFor="event-category" className="text-[#666] mb-1.5 block">
+            <Label htmlFor="edit-event-category" className="text-[#666] mb-1.5 block">
               Category
             </Label>
             <Input
-              id="event-category"
+              id="edit-event-category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               placeholder="e.g., Academic, Social, Career, Sports"
@@ -204,11 +190,11 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
 
           {/* Description */}
           <div>
-            <Label htmlFor="event-description" className="text-[#666] mb-1.5 block">
+            <Label htmlFor="edit-event-description" className="text-[#666] mb-1.5 block">
               Event Description *
             </Label>
             <Textarea
-              id="event-description"
+              id="edit-event-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe your event..."
@@ -230,19 +216,15 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
                   accept="image/*"
                   onChange={handleImageUpload}
                   className="hidden"
-                  id="event-image-upload"
+                  id="edit-event-image-upload"
                 />
-                <label htmlFor="event-image-upload" className="cursor-pointer">
+                <label htmlFor="edit-event-image-upload" className="cursor-pointer">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-10 h-10 rounded-full bg-[#eff6ff] flex items-center justify-center">
                       <Upload className="w-5 h-5 text-[#0b5fff]" />
                     </div>
-                    <div className="text-sm text-[#666]">
-                      Click to upload an image
-                    </div>
-                    <div className="text-xs text-[#999]">
-                      PNG, JPG, GIF up to 10MB
-                    </div>
+                    <div className="text-sm text-[#666]">Click to upload an image</div>
+                    <div className="text-xs text-[#999]">PNG, JPG, GIF up to 10MB</div>
                   </div>
                 </label>
               </div>
@@ -255,7 +237,7 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
                 />
                 <button
                   type="button"
-                  onClick={handleRemoveImage}
+                  onClick={() => setUploadedImage(null)}
                   className="absolute top-2 right-2 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#f9fafb] transition-colors"
                 >
                   <X className="w-4 h-4 text-[#666]" />
@@ -268,7 +250,7 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
           <div className="flex flex-col-reverse sm:flex-row gap-2.5 pt-3">
             <Button
               type="button"
-              onClick={handleCancel}
+              onClick={() => onOpenChange(false)}
               className="bg-white border border-[#e5e7eb] text-[#111] hover:bg-[#f9fafb] px-6 py-2 rounded-lg w-full sm:w-auto"
             >
               Cancel
@@ -278,7 +260,7 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
               disabled={isSubmitDisabled}
               className="bg-[#0b5fff] hover:bg-[#0949cc] text-white px-6 py-2 rounded-lg shadow-sm w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Create Event
+              Save Changes
             </Button>
           </div>
         </form>

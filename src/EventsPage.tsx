@@ -19,15 +19,42 @@ export default function EventsPage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
-    // Start from the beginning of current week (Sunday)
-    const today = new Date();
-    const day = today.getDay();
-    const diff = today.getDate() - day;
-    const weekStart = new Date(today.setDate(diff));
-    weekStart.setHours(0, 0, 0, 0);
-    return weekStart;
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [calendarView, setCalendarView] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+
+  // Shared anchor date — drives all three views
+  const [anchorDate, setAnchorDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
   });
+
+  // Derived: week start for weekly view
+  const currentWeekStart = useMemo(() => {
+    const d = new Date(anchorDate);
+    d.setDate(d.getDate() - d.getDay()); // back to Sunday
+    return d;
+  }, [anchorDate]);
+
+  const handlePrev = () => {
+    setAnchorDate(prev => {
+      const d = new Date(prev);
+      if (calendarView === 'daily') d.setDate(d.getDate() - 1);
+      else if (calendarView === 'weekly') d.setDate(d.getDate() - 7);
+      else d.setMonth(d.getMonth() - 1);
+      return d;
+    });
+  };
+
+  const handleNext = () => {
+    setAnchorDate(prev => {
+      const d = new Date(prev);
+      if (calendarView === 'daily') d.setDate(d.getDate() + 1);
+      else if (calendarView === 'weekly') d.setDate(d.getDate() + 7);
+      else d.setMonth(d.getMonth() + 1);
+      return d;
+    });
+  };
 
   const handleCreateEvent = async (newEvent: {
     title: string;
@@ -37,6 +64,11 @@ export default function EventsPage() {
     description: string;
     image?: string;
     category?: string;
+    locationName?: string;
+    locationAddress?: string;
+    locationLat?: number;
+    locationLng?: number;
+    googlePlaceId?: string;
   }) => {
     try {
       await addEvent({
@@ -47,6 +79,11 @@ export default function EventsPage() {
         description: newEvent.description,
         image: newEvent.image || '',
         category: newEvent.category,
+        locationName: newEvent.locationName,
+        locationAddress: newEvent.locationAddress,
+        locationLat: newEvent.locationLat,
+        locationLng: newEvent.locationLng,
+        googlePlaceId: newEvent.googlePlaceId,
       });
       toast.success('Event created successfully!');
     } catch (err: any) {
@@ -58,6 +95,13 @@ export default function EventsPage() {
   const filteredAndSortedEvents = useMemo(() => {
     let result = [...events];
 
+    // Apply category filter
+    if (selectedCategory !== 'all') {
+      result = result.filter((event) =>
+        (event.category ?? '').toLowerCase() === selectedCategory.toLowerCase()
+      );
+    }
+
     // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -68,11 +112,8 @@ export default function EventsPage() {
       );
     }
 
-    // Apply tab filter
-    // Use a local-timezone YYYY-MM-DD string to avoid UTC midnight parsing
-    // shifting today's date by one day for UTC+ or UTC- users.
-    const d = new Date();
-    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    // Apply tab filter — compare date strings directly to avoid UTC-vs-local timezone skew
+    const todayStr = new Date().toLocaleDateString('en-CA'); // "YYYY-MM-DD" in local time
 
     switch (selectedTab) {
       case 'upcoming':
@@ -80,7 +121,7 @@ export default function EventsPage() {
         result.sort((a, b) => a.date.localeCompare(b.date));
         break;
       case 'rsvp':
-        result = result.filter((event) => user && event.participants.includes(user.id));
+        result = result.filter((event) => event.participants.includes(user?.id ?? ''));
         result.sort((a, b) => a.date.localeCompare(b.date));
         break;
       case 'past':
@@ -96,7 +137,7 @@ export default function EventsPage() {
     }
 
     return result;
-  }, [events, selectedTab, selectedDate, searchQuery]);
+  }, [events, selectedTab, selectedDate, searchQuery, selectedCategory]);
 
   // Get dates that have events for calendar highlighting
   const eventDates = useMemo(() => {
@@ -111,28 +152,39 @@ export default function EventsPage() {
     setSelectedDate(undefined);
   };
 
-  const handlePreviousWeek = () => {
-    const newWeekStart = new Date(currentWeekStart);
-    newWeekStart.setDate(newWeekStart.getDate() - 7);
-    setCurrentWeekStart(newWeekStart);
-  };
-
-  const handleNextWeek = () => {
-    const newWeekStart = new Date(currentWeekStart);
-    newWeekStart.setDate(newWeekStart.getDate() + 7);
-    setCurrentWeekStart(newWeekStart);
-  };
-
-  // Generate the 7 days of the current week (Sun-Sat)
+  // Weekly: 7 days Sun–Sat
   const weekDays = useMemo(() => {
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(currentWeekStart);
-      date.setDate(currentWeekStart.getDate() + i);
-      days.push(date);
-    }
-    return days;
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(currentWeekStart);
+      d.setDate(currentWeekStart.getDate() + i);
+      return d;
+    });
   }, [currentWeekStart]);
+
+  // Monthly: all days in the anchor month padded to start on Sunday
+  const monthGrid = useMemo(() => {
+    const year = anchorDate.getFullYear();
+    const month = anchorDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const startOffset = firstDay.getDay(); // 0=Sun
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+    return Array.from({ length: totalCells }, (_, i) => {
+      const d = new Date(year, month, 1 - startOffset + i);
+      return d;
+    });
+  }, [anchorDate]);
+
+  // Header label changes per view
+  const calendarHeaderLabel = useMemo(() => {
+    if (calendarView === 'daily') {
+      return anchorDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    }
+    if (calendarView === 'weekly') {
+      return currentWeekStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+    return anchorDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }, [calendarView, anchorDate, currentWeekStart]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -146,18 +198,37 @@ export default function EventsPage() {
             <h1 className="text-2xl font-bold font-[Bayon]">Events</h1>
             {isSearchOpen ? (
               <>
-                <div className="w-1/2 flex items-center gap-2 bg-[#f5f5f5] rounded-full px-[16px] py-[8px] ml-auto">
-                  <Search className="w-5 h-5 text-[#999]" strokeWidth={1.5} />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search events..."
-                    autoFocus
-                    className="flex-1 bg-transparent outline-none text-black placeholder:text-[#999] text-sm"
-                  />
+                <div className="flex items-center gap-2 ml-auto">
+                  {/* Category filter dropdown */}
+                  <div className="relative">
+                    <select
+                      value={selectedCategory}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      className="appearance-none bg-[#f5f5f5] rounded-full pl-3 pr-7 py-2 text-sm text-black outline-none cursor-pointer hover:bg-[#ebebeb] transition-colors"
+                    >
+                      <option value="all">All Categories</option>
+                      {['Academic', 'Social', 'Career', 'Sports', 'Other'].map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                    <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[#999]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                  {/* Search bar */}
+                  <div className="flex items-center gap-2 bg-[#f5f5f5] rounded-full px-4 py-2">
+                    <Search className="w-4 h-4 text-[#999]" strokeWidth={1.5} />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search events..."
+                      autoFocus
+                      className="w-32 bg-transparent outline-none text-black placeholder:text-[#999] text-sm"
+                    />
+                  </div>
                 </div>
-                <button 
+                <button
                   onClick={() => {
                     setIsSearchOpen(false);
                     setSearchQuery('');
@@ -208,96 +279,196 @@ export default function EventsPage() {
       {/* Events Feed - Threads Style */}
       <main className="max-w-[640px] mx-auto">
         {/* Calendar View */}
-        <div className="border-b border-[#f0f0f0] py-6 px-4">
-          <div className="flex justify-center">
-            <div className="w-full max-w-md">
-              {/* Month/Year Header with Navigation */}
-              <div className="flex items-center justify-between mb-4">
-                <button
-                  onClick={handlePreviousWeek}
-                  className="p-2 hover:bg-black/5 rounded-full transition-colors"
-                  aria-label="Previous week"
-                >
-                  <svg className="w-5 h-5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                
-                <h3 className="text-base font-semibold text-black font-[Roboto]">
-                  {currentWeekStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                </h3>
-                
-                <button
-                  onClick={handleNextWeek}
-                  className="p-2 hover:bg-black/5 rounded-full transition-colors"
-                  aria-label="Next week"
-                >
-                  <svg className="w-5 h-5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
+        <div className="border-b border-[#f0f0f0] py-5 px-4">
+          <div className="w-full max-w-md mx-auto">
+
+            {/* Header row: prev · label · next + view toggle */}
+            <div className="flex items-center justify-between mb-4 gap-2">
+              <button onClick={handlePrev} className="p-2 hover:bg-black/5 rounded-full transition-colors flex-shrink-0" aria-label="Previous">
+                <svg className="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+              </button>
+
+              <h3 className="text-sm font-semibold text-black font-[Roboto] text-center flex-1 truncate">
+                {calendarHeaderLabel}
+              </h3>
+
+              <button onClick={handleNext} className="p-2 hover:bg-black/5 rounded-full transition-colors flex-shrink-0" aria-label="Next">
+                <svg className="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+              </button>
+
+              {/* Segmented view toggle */}
+              <div className="flex items-center bg-[#f3f4f6] rounded-lg p-0.5 gap-0.5 flex-shrink-0">
+                {(['daily', 'weekly', 'monthly'] as const).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setCalendarView(v)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                      calendarView === v
+                        ? 'bg-white text-black shadow-sm'
+                        : 'text-[#666] hover:text-black'
+                    }`}
+                  >
+                    {v.charAt(0).toUpperCase() + v.slice(1)}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {/* Week View - Sun to Sat */}
-              <div className="grid grid-cols-7 gap-2">
-                {weekDays.map((date, index) => {
-                  const dateString = date.toISOString().split('T')[0];
-                  const isSelected = selectedDate?.toISOString().split('T')[0] === dateString;
-                  const hasEvent = eventDates.some(
-                    (eventDate) => eventDate.toISOString().split('T')[0] === dateString
-                  );
-                  const isToday = new Date().toISOString().split('T')[0] === dateString;
-                  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-                  return (
+            {/* ── DAILY VIEW ── */}
+            {calendarView === 'daily' && (() => {
+              const ds = anchorDate.toLocaleDateString('en-CA');
+              const isSelected = selectedDate?.toLocaleDateString('en-CA') === ds;
+              const hasEvent = eventDates.some(d => d.toLocaleDateString('en-CA') === ds);
+              const isToday = new Date().toLocaleDateString('en-CA') === ds;
+              const dayEvents = events.filter(e => e.date === ds);
+              return (
                     <button
-                      key={dateString}
-                      onClick={() => handleDateSelect(date)}
-                      className={`flex flex-col items-center justify-center py-3 px-2 rounded-xl border-2 transition-all ${
-                        isSelected
-                          ? 'bg-black border-black text-white shadow-lg'
-                          : isToday
-                          ? 'bg-blue-50 border-blue-200 text-black'
-                          : 'bg-white border-[#f0f0f0] text-black hover:border-[#ddd] hover:shadow-md'
+                      onClick={() => handleDateSelect(isSelected ? undefined : anchorDate)}
+                      className={`w-full flex items-stretch gap-4 px-4 py-4 rounded-2xl border-2 transition-all text-left ${
+                        isSelected ? 'bg-black border-black text-white shadow-lg'
+                        : isToday ? 'bg-blue-50 border-blue-200 text-black'
+                        : 'bg-white border-[#f0f0f0] text-black hover:border-[#ddd] hover:shadow-md'
                       }`}
                     >
-                      <span className={`text-xs mb-1 ${
-                        isSelected ? 'text-white/70' : 'text-[#999]'
-                      }`}>
-                        {dayNames[index]}
-                      </span>
-                      <span className={`text-xl font-semibold ${
-                        isSelected ? 'text-white' : hasEvent ? 'text-blue-600' : 'text-black'
-                      }`}>
+                      {/* Left — date block */}
+                      <div className="flex flex-col items-center justify-center min-w-[56px]">
+                        <span className={`text-[11px] font-semibold uppercase tracking-wide ${isSelected ? 'text-white/60' : 'text-[#999]'}`}>
+                          {anchorDate.toLocaleDateString('en-US', { weekday: 'short' })}
+                        </span>
+                        <span className={`text-5xl font-bold leading-none ${isSelected ? 'text-white' : hasEvent ? 'text-[#6366f1]' : 'text-black'}`}>
+                          {anchorDate.getDate()}
+                        </span>
+                        <span className={`text-[10px] mt-0.5 ${isSelected ? 'text-white/50' : 'text-[#bbb]'}`}>
+                          {anchorDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                        </span>
+                      </div>
+
+                      {/* Divider */}
+                      <div className={`w-px self-stretch ${isSelected ? 'bg-white/20' : 'bg-[#f0f0f0]'}`} />
+
+                      {/* Right — event summary */}
+                      <div className="flex-1 flex flex-col justify-center gap-1.5 min-w-0">
+                        {dayEvents.length === 0 ? (
+                          <span className={`text-sm ${isSelected ? 'text-white/50' : 'text-[#bbb]'}`}>No events today</span>
+                        ) : (
+                          <>
+                            <span className={`text-[11px] font-semibold ${isSelected ? 'text-white/60' : 'text-[#6366f1]'}`}>
+                              {dayEvents.length} event{dayEvents.length > 1 ? 's' : ''}
+                            </span>
+                            {dayEvents.slice(0, 3).map(ev => (
+                              <div key={ev.id} className="flex items-baseline gap-1.5 min-w-0">
+                                <span className={`text-[10px] shrink-0 font-medium ${isSelected ? 'text-white/50' : 'text-[#999]'}`}>{ev.time.split('–')[0].split('-')[0].trim()}</span>
+                                <span className={`text-xs font-medium truncate ${isSelected ? 'text-white' : 'text-black'}`}>{ev.title}</span>
+                              </div>
+                            ))}
+                            {dayEvents.length > 3 && (
+                              <span className={`text-[10px] ${isSelected ? 'text-white/40' : 'text-[#bbb]'}`}>+{dayEvents.length - 3} more</span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </button>
+              );
+            })()}
+
+            {/* ── WEEKLY VIEW ── */}
+            {calendarView === 'weekly' && (
+              <div className="grid grid-cols-7 gap-1.5">
+                {weekDays.map((date) => {
+                  const ds = date.toLocaleDateString('en-CA');
+                  const isSelected = selectedDate?.toLocaleDateString('en-CA') === ds;
+                  const hasEvent = eventDates.some(d => d.toLocaleDateString('en-CA') === ds);
+                  const isToday = new Date().toLocaleDateString('en-CA') === ds;
+                  const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+                  return (
+                    <button
+                      key={ds}
+                      onClick={() => handleDateSelect(isSelected ? undefined : date)}
+                      className={`flex flex-col items-center justify-center py-3 rounded-xl border-2 transition-all ${
+                        isSelected ? 'bg-black border-black text-white shadow-lg'
+                        : isToday ? 'bg-blue-50 border-blue-200 text-black'
+                        : 'bg-white border-[#f0f0f0] text-black hover:border-[#ddd] hover:shadow-md'
+                      }`}
+                    >
+                      <span className={`text-[10px] mb-1 ${isSelected ? 'text-white/70' : 'text-[#999]'}`}>{dayName}</span>
+                      <span className={`text-lg font-semibold leading-none ${isSelected ? 'text-white' : hasEvent ? 'text-[#6366f1]' : 'text-black'}`}>
                         {date.getDate()}
                       </span>
-                      {hasEvent && (
-                        <div className={`w-1 h-1 rounded-full mt-1 ${
-                          isSelected ? 'bg-white' : 'bg-blue-500'
-                        }`} />
-                      )}
+                      {hasEvent && <div className={`w-1 h-1 rounded-full mt-1 ${isSelected ? 'bg-white' : 'bg-[#6366f1]'}`} />}
                     </button>
                   );
                 })}
               </div>
-            </div>
+            )}
+
+            {/* ── MONTHLY VIEW ── */}
+            {calendarView === 'monthly' && (() => {
+              const currentMonth = anchorDate.getMonth();
+              const dayLabels = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+              return (
+                <div>
+                  {/* Day-of-week headers */}
+                  <div className="grid grid-cols-7 mb-1">
+                    {dayLabels.map(d => (
+                      <div key={d} className="text-center text-[10px] font-semibold text-[#bbb] py-1">{d}</div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-y-1">
+                    {monthGrid.map((date) => {
+                      const ds = date.toLocaleDateString('en-CA');
+                      const isCurrentMonth = date.getMonth() === currentMonth;
+                      const isSelected = selectedDate?.toLocaleDateString('en-CA') === ds;
+                      const hasEvent = isCurrentMonth && eventDates.some(d => d.toLocaleDateString('en-CA') === ds);
+                      const now = new Date();
+                      const isTodayExact =
+                        date.getFullYear() === now.getFullYear() &&
+                        date.getMonth() === now.getMonth() &&
+                        date.getDate() === now.getDate();
+                      return (
+                            <button
+                              key={ds}
+                              onClick={() => isCurrentMonth && handleDateSelect(isSelected ? undefined : date)}
+                              disabled={!isCurrentMonth}
+                              className={`relative flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
+                                !isCurrentMonth ? 'opacity-20 cursor-default' : 'hover:bg-[#f5f5f5]'
+                              }`}
+                            >
+                              <span className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-medium transition-all ${
+                                isSelected
+                                  ? 'bg-black text-white'
+                                  : isTodayExact
+                                  ? 'bg-[#6366f1] text-white'
+                                  : 'text-black'
+                              }`}>
+                                {date.getDate()}
+                              </span>
+                              <div className="h-3 flex items-center justify-center mt-0.5">
+                                {isTodayExact && !isSelected ? (
+                                  <span className="text-[8px] font-semibold text-[#6366f1] leading-none">Today</span>
+                                ) : hasEvent ? (
+                                  <div className={`w-1 h-1 rounded-full ${isSelected ? 'bg-white' : 'bg-[#6366f1]'}`} />
+                                ) : null}
+                              </div>
+                            </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
           </div>
+
+          {/* Selected date label */}
           {selectedDate && (
             <div className="mt-4 text-center">
-              <p className="text-sm text-[#666] mb-2">
+              <p className="text-sm text-[#666] mb-1">
                 Showing events for{' '}
                 <span className="font-semibold text-black">
-                  {selectedDate.toLocaleDateString('en-US', {
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
+                  {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                 </span>
               </p>
-              <button
-                onClick={clearDateFilter}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
-              >
+              <button onClick={clearDateFilter} className="text-sm text-[#6366f1] hover:text-[#4f46e5] font-medium transition-colors">
                 Show all
               </button>
             </div>

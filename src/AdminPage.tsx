@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getAvatarColor, getAnonymousName } from './utils/anonymousName';
 import { NavigationBar } from './components/NavigationBar';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -70,7 +71,7 @@ export default function AdminPage() {
   const loadAllPosts = async () => {
     const { data } = await supabase
       .from('posts')
-      .select('id, title, category, created_at, profiles!posts_author_id_fkey(name)')
+      .select('id, title, category, created_at, author_id, profiles!posts_author_id_fkey(name)')
       .order('created_at', { ascending: false });
     setAllPosts(data || []);
   };
@@ -78,7 +79,7 @@ export default function AdminPage() {
   const loadAllListings = async () => {
     const { data } = await supabase
       .from('marketplace_items')
-      .select('id, title, category, price, created_at, profiles!marketplace_items_seller_id_fkey(name)')
+      .select('id, title, category, price, created_at, seller_id, profiles!marketplace_items_seller_id_fkey(name)')
       .order('created_at', { ascending: false });
     setAllListings(data || []);
   };
@@ -195,7 +196,7 @@ export default function AdminPage() {
                     <div className="flex items-start gap-4">
                       {/* Avatar */}
                       <Avatar className="w-14 h-14 shrink-0">
-                        <AvatarFallback className="bg-gradient-to-br from-[#6366f1] to-[#8b5cf6] text-white font-semibold text-lg">
+                        <AvatarFallback className="text-white font-semibold text-lg" style={{ background: getAvatarColor(u.id) }}>
                           {(u.name ?? '?').split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                         </AvatarFallback>
                       </Avatar>
@@ -262,7 +263,7 @@ export default function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-[#111] font-[Roboto] truncate">{p.title}</p>
                         <div className="flex items-center gap-3 mt-1 text-xs text-[#666] font-[Roboto]">
-                          <span>{p.profiles?.name ?? 'Unknown'}</span>
+                          <span>{p.profiles?.name ?? getAnonymousName(p.author_id || p.id)}</span>
                           <span className="flex items-center gap-1"><Tag className="w-3 h-3" />{p.category}</span>
                           <span>{p.created_at?.split('T')[0]}</span>
                         </div>
@@ -310,7 +311,7 @@ export default function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-[#111] font-[Roboto] truncate">{item.title}</p>
                         <div className="flex items-center gap-3 mt-1 text-xs text-[#666] font-[Roboto]">
-                          <span>{item.profiles?.name ?? 'Unknown'}</span>
+                          <span>{item.profiles?.name ?? getAnonymousName(item.seller_id || item.id)}</span>
                           <span className="flex items-center gap-1"><Tag className="w-3 h-3" />{item.category}</span>
                           <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />{Number(item.price).toFixed(2)}</span>
                           <span>{item.created_at?.split('T')[0]}</span>

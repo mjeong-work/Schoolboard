@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getAvatarColor } from '../utils/anonymousName';
 import { NavigationBar } from './NavigationBar';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -21,8 +22,9 @@ export const MessagesPage: React.FC = () => {
     return {
       id: c.id,
       otherUser: {
-        name: other?.userName ?? 'Unknown',
-        avatar: (other?.userName ?? 'U').charAt(0).toUpperCase(),
+        name: other?.userName ?? getAnonymousName(other?.userId ?? ''),
+        avatar: (other?.userName ?? getAnonymousName(other?.userId ?? '')).charAt(0).toUpperCase(),
+        userId: other?.userId ?? '',
       },
       lastMessage: c.lastMessage
         ? { text: c.lastMessage.content, timestamp: c.lastMessage.timestamp, isFromMe: c.lastMessage.senderId === currentUser?.id, unread: !c.lastMessage.read }
@@ -90,7 +92,7 @@ export const MessagesPage: React.FC = () => {
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#4D8CFF] to-[#0B5FFF] flex items-center justify-center text-white shrink-0 font-[Roboto]">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0 font-[Roboto]" style={{ background: getAvatarColor(selectedConversation.otherUser.userId) }}>
                 {selectedConversation.otherUser.avatar}
               </div>
               <div className="flex-1 min-w-0">
@@ -262,7 +264,7 @@ export const MessagesPage: React.FC = () => {
                 <div className="flex gap-3">
                   {/* Avatar */}
                   <div className="shrink-0">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#4D8CFF] to-[#0B5FFF] flex items-center justify-center text-white font-[Roboto]">
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-[Roboto]" style={{ background: getAvatarColor(conversation.otherUser.userId) }}>
                       {conversation.otherUser.avatar}
                     </div>
                   </div>

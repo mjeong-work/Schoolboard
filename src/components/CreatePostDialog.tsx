@@ -54,15 +54,21 @@ export function CreatePostDialog({ open, onOpenChange, onSubmit }: CreatePostDia
     onOpenChange(false);
   };
 
+  const MAX_IMAGE_BYTES = 1 * 1024 * 1024; // 1 MB
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setUploadedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    if (file.size > MAX_IMAGE_BYTES) {
+      alert(`Image must be under 1 MB (selected file is ${(file.size / 1024 / 1024).toFixed(1)} MB).`);
+      e.target.value = '';
+      return;
     }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setUploadedImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleRemoveImage = () => {
@@ -176,7 +182,7 @@ export function CreatePostDialog({ open, onOpenChange, onSubmit }: CreatePostDia
                       Click to upload an image
                     </div>
                     <div className="text-xs text-[#999]">
-                      PNG, JPG, GIF up to 10MB
+                      PNG, JPG, GIF up to 1MB
                     </div>
                   </div>
                 </label>

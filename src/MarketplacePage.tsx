@@ -4,7 +4,6 @@ import { NavigationBar } from './components/NavigationBar';
 import { MarketplaceCard } from './components/MarketplaceCard';
 import { FloatingActionButton } from './components/FloatingActionButton';
 import { CreateMarketplaceDialog } from './components/CreateMarketplaceDialog';
-import { Button } from './components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
 import { toast } from 'sonner@2.0.3';
 import { useData } from './utils/dataContext';
@@ -17,6 +16,15 @@ export default function MarketplacePage() {
   const [selectedTab, setSelectedTab] = useState('all');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<'latest' | 'nearest'>('latest');
+
+  // Deterministic mock coords per item for geo sort
+  const mockDist = (id: string) => {
+    const seed = parseInt(id, 10) || id.charCodeAt(0);
+    const dlat = ((seed * 7) % 20 - 10) * 0.001;
+    const dlng = ((seed * 13) % 20 - 10) * 0.001;
+    return Math.sqrt(dlat * dlat + dlng * dlng);
+  };
 
   const handleCreateListing = async (newListing: {
     title: string;
@@ -24,7 +32,6 @@ export default function MarketplacePage() {
     price: number;
     condition: string;
     description: string;
-    contactMethod: string;
     image?: string;
   }) => {
     try {
@@ -37,7 +44,7 @@ export default function MarketplacePage() {
         image: newListing.image || null,
         seller: {
           name: user?.name || 'Anonymous Student',
-          contact: newListing.contactMethod,
+          contact: '',
           verified: user?.verified || false,
         },
       });
@@ -69,11 +76,15 @@ export default function MarketplacePage() {
       result = result.filter((item) => item.savedBy.includes(user?.id || ''));
     }
 
-    // Sort by latest
-    result.sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime());
+    // Sort
+    if (sortBy === 'nearest') {
+      result.sort((a, b) => mockDist(a.id) - mockDist(b.id));
+    } else {
+      result.sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime());
+    }
 
     return result;
-  }, [marketplaceItems, searchQuery, selectedTab, user?.id]);
+  }, [marketplaceItems, searchQuery, selectedTab, sortBy, user?.id]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -109,22 +120,28 @@ export default function MarketplacePage() {
                 </button>
               </>
             ) : (
-              <>
-                {user && (
-                  <Button
-                    onClick={() => setIsCreateDialogOpen(true)}
-                    className="ml-auto bg-black hover:bg-black/80 text-white px-4 h-8 rounded-full text-sm font-[Roboto]"
-                  >
-                    Post
-                  </Button>
-                )}
+              <div className="flex items-center gap-1 ml-auto">
+                {/* Sort toggle */}
+                <div className="flex items-center bg-[#f3f4f6] rounded-lg p-0.5 gap-0.5">
+                  {(['latest', 'nearest'] as const).map(v => (
+                    <button
+                      key={v}
+                      onClick={() => setSortBy(v)}
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                        sortBy === v ? 'bg-white text-black shadow-sm' : 'text-[#666] hover:text-black'
+                      }`}
+                    >
+                      {v === 'latest' ? 'Latest' : 'Nearest'}
+                    </button>
+                  ))}
+                </div>
                 <button
                   onClick={() => setIsSearchOpen(true)}
-                  className={`p-2 hover:bg-black/5 rounded-full transition-colors${!user ? ' ml-auto' : ''}`}
+                  className="p-2 hover:bg-black/5 rounded-full transition-colors"
                 >
                   <Search className="w-5 h-5 text-black" strokeWidth={1.5} />
                 </button>
-              </>
+              </div>
             )}
           </div>
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { MessageSquare, Trash2 } from 'lucide-react';
+import { getAvatarColor } from '../utils/anonymousName';
 import { useChat } from '../utils/chatContext';
 import { useAuth } from '../utils/authContext';
 import { ScrollArea } from './ui/scroll-area';
@@ -86,7 +87,7 @@ export const ChatList: React.FC<ChatListProps> = ({ onSelectConversation }) => {
               onClick={() => onSelectConversation(conversation.id)}
             >
               {/* Avatar */}
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#6366f1] to-[#8b5cf6] flex items-center justify-center text-white shrink-0 shadow-md shadow-indigo-500/20 ring-2 ring-white">
+              <div className="w-12 h-12 rounded-full flex items-center justify-center text-white shrink-0 shadow-md ring-2 ring-white" style={{ background: getAvatarColor(otherParticipant?.userId || conversation.id) }}>
                 <span className="font-semibold text-lg">{otherParticipant?.userName.charAt(0).toUpperCase()}</span>
               </div>
 

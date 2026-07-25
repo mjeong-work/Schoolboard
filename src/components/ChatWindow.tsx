@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Minimize2, Maximize2 } from 'lucide-react';
+import { getAvatarColor } from '../utils/anonymousName';
 import { useChat } from '../utils/chatContext';
 import { useAuth } from '../utils/authContext';
 import { Button } from './ui/button';
@@ -118,7 +119,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           onClick={onMinimize}
         >
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#0b5fff] flex items-center justify-center text-white shrink-0">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center text-white shrink-0" style={{ background: getAvatarColor(otherParticipant?.userId || '') }}>
               {otherParticipant?.userName.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
@@ -168,7 +169,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#e5e7eb] bg-white shrink-0">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-full bg-[#0b5fff] flex items-center justify-center text-white shrink-0">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center text-white shrink-0" style={{ background: getAvatarColor(otherParticipant?.userId || '') }}>
             {otherParticipant?.userName.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">

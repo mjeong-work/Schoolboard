@@ -28,7 +28,6 @@ interface CreateMarketplaceDialogProps {
     price: number;
     condition: string;
     description: string;
-    contactMethod: string;
     image?: string;
   }) => void;
 }
@@ -39,13 +38,12 @@ export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: Create
   const [price, setPrice] = useState('');
   const [condition, setCondition] = useState('');
   const [description, setDescription] = useState('');
-  const [contactMethod, setContactMethod] = useState('');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!title.trim() || !category || !price || !condition || !description.trim() || !contactMethod.trim()) {
+    if (!title.trim() || !category || !price || !condition || !description.trim()) {
       return;
     }
 
@@ -55,7 +53,6 @@ export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: Create
       price: parseFloat(price),
       condition,
       description: description.trim(),
-      contactMethod: contactMethod.trim(),
       image: uploadedImage || undefined
     };
 
@@ -67,7 +64,7 @@ export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: Create
     setPrice('');
     setCondition('');
     setDescription('');
-    setContactMethod('');
+
     setUploadedImage(null);
     onOpenChange(false);
   };
@@ -93,7 +90,7 @@ export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: Create
     setPrice('');
     setCondition('');
     setDescription('');
-    setContactMethod('');
+
     setUploadedImage(null);
     onOpenChange(false);
   };
@@ -200,21 +197,6 @@ export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: Create
             />
           </div>
 
-          {/* Contact Method */}
-          <div>
-            <Label htmlFor="listing-contact" className="text-[#666] mb-1.5 block">
-              Contact Method *
-            </Label>
-            <Input
-              id="listing-contact"
-              value={contactMethod}
-              onChange={(e) => setContactMethod(e.target.value)}
-              placeholder="e.g., DM me on Campus Connect, Email: your@email.com, Text: (555) 123-4567"
-              className="border-[#e5e7eb] rounded-lg"
-              required
-            />
-          </div>
-
           {/* Image Upload */}
           <div>
             <Label className="text-[#666] mb-1.5 block">
@@ -273,7 +255,7 @@ export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: Create
             </Button>
             <Button
               type="submit"
-              disabled={!title.trim() || !category || !price || !condition || !description.trim() || !contactMethod.trim()}
+              disabled={!title.trim() || !category || !price || !condition || !description.trim()}
               className="bg-[#0b5fff] hover:bg-[#0949cc] text-white px-6 py-2 rounded-lg shadow-sm w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Create Listing

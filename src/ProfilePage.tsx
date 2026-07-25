@@ -7,11 +7,10 @@ import { Badge } from './components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './components/ui/avatar';
 import { useAuth } from './utils/authContext';
 import { useData } from './utils/dataContext';
-import { 
-  Mail, 
-  MapPin, 
-  Calendar, 
-  BadgeCheck, 
+import {
+  Mail,
+  Calendar,
+  BadgeCheck,
   Settings,
   MessageSquare,
   CalendarDays,
@@ -22,84 +21,9 @@ import {
   X
 } from 'lucide-react';
 
-// Mock user profile data (will be replaced with real data from auth context)
-const mockUserProfile = {
-  location: 'North Campus',
-  joinDate: '2024-09-01',
-  bio: 'CS student passionate about AI and machine learning. Love connecting with fellow students and sharing resources!',
-  stats: {
-    posts: 23,
-    eventsAttended: 12,
-    itemsSold: 8,
-    savedItems: 15
-  }
-};
-
-const userActivity = {
-  posts: [
-    {
-      id: '1',
-      title: 'Looking for study group partners for CS101',
-      date: '2025-10-28',
-      likes: 24,
-      comments: 5
-    },
-    {
-      id: '2',
-      title: 'Free pizza at the Student Center today!',
-      date: '2025-10-30',
-      likes: 156,
-      comments: 12
-    },
-    {
-      id: '3',
-      title: 'Best coffee spots on campus?',
-      date: '2025-10-27',
-      likes: 45,
-      comments: 8
-    }
-  ],
-  events: [
-    {
-      id: '1',
-      title: 'Fall Semester Study Break - Free Coffee & Snacks',
-      date: '2025-11-01',
-      status: 'RSVP\'d'
-    },
-    {
-      id: '2',
-      title: 'International Food Festival',
-      date: '2025-11-10',
-      status: 'RSVP\'d'
-    },
-    {
-      id: '3',
-      title: 'CS Department Career Fair',
-      date: '2025-11-05',
-      status: 'RSVP\'d'
-    }
-  ],
-  items: [
-    {
-      id: '1',
-      title: 'Calculus Textbook - 8th Edition',
-      price: 45,
-      views: 156,
-      status: 'Active'
-    },
-    {
-      id: '2',
-      title: 'Scientific Calculator TI-84 Plus',
-      price: 60,
-      views: 201,
-      status: 'Active'
-    }
-  ]
-};
-
 export default function ProfilePage() {
   const { user } = useAuth();
-  const { getUserPosts, getUserEvents, getUserMarketplaceItems, getUserSavedItems, getUserStats } = useData();
+  const { getUserPosts, getUserEvents, getUserMarketplaceItems, getUserStats } = useData();
   const [activeTab, setActiveTab] = useState('posts');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -107,48 +31,34 @@ export default function ProfilePage() {
   const userPosts = getUserPosts();
   const userEvents = getUserEvents();
   const userItems = getUserMarketplaceItems();
-  const userSavedItems = getUserSavedItems();
   const stats = getUserStats();
 
-  // Merge auth user with mock profile data
-  const userProfile = {
-    name: user?.name || 'User',
-    email: user?.email || '',
-    avatar: user?.avatar,
-    verified: user?.verified || false,
-    major: user?.department || 'Not specified',
-    graduationYear: user?.graduationYear || 'N/A',
-    location: mockUserProfile.location,
-    joinDate: mockUserProfile.joinDate,
-    bio: mockUserProfile.bio,
-    stats: stats
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
+  const name = user?.name || 'User';
+  const email = user?.email || '';
+  const avatar = user?.avatar;
+  const verified = user?.verified || false;
+  const major = user?.department || '';
+  const graduationYear = user?.graduationYear || '';
+  const bio = user?.bio || '';
+  const joinDate = user?.joinDate || '';
 
   const formatJoinDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'long',
-      year: 'numeric'
-    });
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
+
+  const majorLine = [
+    major || 'Major not set',
+    graduationYear ? `Class of ${graduationYear}` : null,
+  ].filter(Boolean).join(' • ');
 
   return (
     <div className="min-h-screen bg-white">
       <NavigationBar activeTab="profile" />
-      
+
       {/* Threads-style Header */}
       <div className="sticky top-0 bg-white/95 backdrop-blur-sm z-10">
         <div className="max-w-[640px] mx-auto px-4 border-b border-[#f0f0f0]">
-          {/* Top Bar */}
           <div className="flex items-center py-3 gap-3">
             <h1 className="text-2xl font-bold font-[Bayon]">Profile</h1>
             {isSearchOpen ? (
@@ -164,11 +74,8 @@ export default function ProfilePage() {
                     className="flex-1 bg-transparent outline-none text-black placeholder:text-[#999] text-sm"
                   />
                 </div>
-                <button 
-                  onClick={() => {
-                    setIsSearchOpen(false);
-                    setSearchQuery('');
-                  }}
+                <button
+                  onClick={() => { setIsSearchOpen(false); setSearchQuery(''); }}
                   className="p-2 hover:bg-black/5 rounded-full transition-colors"
                 >
                   <X className="w-5 h-5 text-black" strokeWidth={1.5} />
@@ -178,7 +85,7 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
-      
+
       {/* Main Content */}
       <main className="max-w-[640px] mx-auto px-4 sm:px-6 py-5 sm:py-6">
         {/* Profile Header Card */}
@@ -187,9 +94,9 @@ export default function ProfilePage() {
             {/* Avatar */}
             <div className="flex justify-center sm:justify-start text-[rgb(10,10,10)] font-[Roboto]">
               <Avatar className="w-16 h-16 sm:w-24 sm:h-24 border-3 border-white shadow-lg">
-                <AvatarImage src={userProfile.avatar} alt={userProfile.name} />
+                <AvatarImage src={avatar} alt={name} />
                 <AvatarFallback className="text-xl bg-[#6366f1] text-white">
-                  {userProfile.name.split(' ').map(n => n[0]).join('')}
+                  {name.split(' ').map(n => n[0]).join('')}
                 </AvatarFallback>
               </Avatar>
             </div>
@@ -199,15 +106,15 @@ export default function ProfilePage() {
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
                 <div>
                   <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
-                    <h1 className="text-[#111] font-[Roboto] text-[20px] font-bold">{userProfile.name}</h1>
-                    {userProfile.verified && (
-                      <BadgeCheck className="w-6 h-6 text-[#6366f1]" />
-                    )}
+                    <h1 className="text-[#111] font-[Roboto] text-[20px] font-bold">{name}</h1>
+                    {verified && <BadgeCheck className="w-6 h-6 text-[#6366f1]" />}
                   </div>
-                  <p className="text-[#666] mb-3 font-[Roboto] text-[14px]">{userProfile.bio}</p>
+                  <p className="text-[#666] mb-3 font-[Roboto] text-[14px]">
+                    {bio ? bio : <span className="italic text-[#bbb]">No bio yet — add one in Edit Profile</span>}
+                  </p>
                 </div>
-                
-                <Button 
+
+                <Button
                   onClick={() => window.location.hash = 'edit-profile'}
                   className="bg-white border border-[#f0f0f0] text-[#111] hover:bg-[#fafafa] px-4 py-2 rounded-lg gap-2 self-center sm:self-start font-[Roboto] text-[13px]"
                 >
@@ -218,40 +125,40 @@ export default function ProfilePage() {
 
               {/* User Details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 text-sm">
-                <div className="flex items-center justify-center sm:justify-start gap-2 text-[#666] font-[Roboto]">
-                  <Mail className="w-4 h-4" />
-                  <span className="text-[13px]">{userProfile.email}</span>
-                </div>
-                <div className="flex items-center justify-center sm:justify-start gap-2 text-[#666] font-[Roboto]">
-                  <MapPin className="w-4 h-4" />
-                  <span className="text-[13px]">{userProfile.location}</span>
-                </div>
+                {email && (
+                  <div className="flex items-center justify-center sm:justify-start gap-2 text-[#666] font-[Roboto]">
+                    <Mail className="w-4 h-4" />
+                    <span className="text-[13px]">{email}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-center sm:justify-start gap-2 text-[#666] font-[Roboto]">
                   <BadgeCheck className="w-4 h-4" />
-                  <span className="text-[13px]">{userProfile.major} • Class of {userProfile.graduationYear}</span>
+                  <span className="text-[13px]">{majorLine}</span>
                 </div>
-                <div className="flex items-center justify-center sm:justify-start gap-2 text-[#666] font-[Roboto]">
-                  <Calendar className="w-4 h-4" />
-                  <span className="text-[13px]">Joined {formatJoinDate(userProfile.joinDate)}</span>
-                </div>
+                {joinDate && (
+                  <div className="flex items-center justify-center sm:justify-start gap-2 text-[#666] font-[Roboto]">
+                    <Calendar className="w-4 h-4" />
+                    <span className="text-[13px]">Joined {formatJoinDate(joinDate)}</span>
+                  </div>
+                )}
               </div>
 
               {/* Stats */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-[#f0f0f0]">
                 <div className="text-center">
-                  <div className="text-[#111] mb-1 font-[Roboto]">{userProfile.stats.posts}</div>
+                  <div className="text-[#111] mb-1 font-[Roboto]">{stats.posts}</div>
                   <div className="text-sm text-[#666] font-[Roboto]">Posts</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-[#111] mb-1 font-[Roboto]">{userProfile.stats.eventsAttended}</div>
+                  <div className="text-[#111] mb-1 font-[Roboto]">{stats.eventsAttended}</div>
                   <div className="text-sm text-[#666] font-[Roboto]">Events</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-[#111] mb-1 font-[Roboto]">{userProfile.stats.itemsSold}</div>
+                  <div className="text-[#111] mb-1 font-[Roboto]">{stats.itemsSold}</div>
                   <div className="text-sm text-[#666] font-[Roboto]">Items Sold</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-[#111] mb-1 font-[Roboto]">{userProfile.stats.savedItems}</div>
+                  <div className="text-[#111] mb-1 font-[Roboto]">{stats.savedItems}</div>
                   <div className="text-sm text-[#666] font-[Roboto]">Saved</div>
                 </div>
               </div>
@@ -262,22 +169,22 @@ export default function ProfilePage() {
         {/* Activity Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="w-full bg-transparent border-0 p-0 h-auto justify-start gap-8 mb-6 border-b border-[#f0f0f0]">
-            <TabsTrigger 
-              value="posts" 
+            <TabsTrigger
+              value="posts"
               className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
             >
               <MessageSquare className="w-4 h-4" />
               My Posts
             </TabsTrigger>
-            <TabsTrigger 
-              value="events" 
+            <TabsTrigger
+              value="events"
               className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
             >
               <CalendarDays className="w-4 h-4" />
               My Events
             </TabsTrigger>
-            <TabsTrigger 
-              value="items" 
+            <TabsTrigger
+              value="items"
               className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
             >
               <ShoppingBag className="w-4 h-4" />
@@ -291,7 +198,7 @@ export default function ProfilePage() {
               <Card className="p-8 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px] text-center">
                 <MessageSquare className="w-12 h-12 text-[#d1d5db] mx-auto mb-3" />
                 <p className="text-[#666] font-[Roboto]">You haven't created any posts yet.</p>
-                <Button 
+                <Button
                   onClick={() => window.location.hash = '#/community'}
                   className="bg-[rgb(0,0,0)] hover:bg-[#1a1a1a] text-[rgb(255,254,254)] mt-4 px-4 py-2 rounded-lg font-[Roboto]"
                 >
@@ -316,7 +223,7 @@ export default function ProfilePage() {
                         </div>
                       </div>
                     </div>
-                    <Button 
+                    <Button
                       onClick={() => window.location.hash = '#/community'}
                       className="bg-white border border-[#f0f0f0] text-[#111] hover:bg-[#fafafa] px-3 py-2 rounded-lg text-sm font-[Roboto]"
                     >
@@ -334,7 +241,7 @@ export default function ProfilePage() {
               <Card className="p-8 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px] text-center">
                 <CalendarDays className="w-12 h-12 text-[#d1d5db] mx-auto mb-3" />
                 <p className="text-[#666] font-[Roboto]">You haven't RSVP'd to any events yet.</p>
-                <Button 
+                <Button
                   onClick={() => window.location.hash = '#/events'}
                   className="bg-[rgb(0,0,0)] hover:bg-[#1a1a1a] text-white mt-4 px-4 py-2 rounded-lg font-[Roboto]"
                 >
@@ -357,7 +264,7 @@ export default function ProfilePage() {
                         <span>{new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                       </div>
                     </div>
-                    <Button 
+                    <Button
                       onClick={() => window.location.hash = '#/events'}
                       className="bg-white border border-[#f0f0f0] text-[#111] hover:bg-[#fafafa] px-3 py-2 rounded-lg text-sm font-[Roboto]"
                     >
@@ -375,7 +282,7 @@ export default function ProfilePage() {
               <Card className="p-8 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px] text-center">
                 <ShoppingBag className="w-12 h-12 text-[#d1d5db] mx-auto mb-3" />
                 <p className="text-[#666] font-[Roboto]">You haven't listed any items for sale yet.</p>
-                <Button 
+                <Button
                   onClick={() => window.location.hash = '#/marketplace'}
                   className="bg-[rgb(0,0,0)] hover:bg-[#1a1a1a] text-white mt-4 px-4 py-2 rounded-lg font-[Roboto]"
                 >
@@ -407,7 +314,7 @@ export default function ProfilePage() {
                         )}
                       </div>
                     </div>
-                    <Button 
+                    <Button
                       onClick={() => window.location.hash = '#/marketplace'}
                       className="bg-white border border-[#f0f0f0] text-[#111] hover:bg-[#fafaba] px-3 py-2 rounded-lg text-sm font-[Roboto]"
                     >

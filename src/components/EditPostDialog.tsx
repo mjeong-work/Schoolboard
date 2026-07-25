@@ -39,13 +39,19 @@ export function EditPostDialog({ open, onOpenChange, post, onSubmit }: EditPostD
     }
   };
 
+  const MAX_IMAGE_BYTES = 1 * 1024 * 1024; // 1 MB
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setImage(reader.result as string);
-      reader.readAsDataURL(file);
+    if (!file) return;
+    if (file.size > MAX_IMAGE_BYTES) {
+      alert(`Image must be under 1 MB (selected file is ${(file.size / 1024 / 1024).toFixed(1)} MB).`);
+      e.target.value = '';
+      return;
     }
+    const reader = new FileReader();
+    reader.onloadend = () => setImage(reader.result as string);
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -111,7 +117,7 @@ export function EditPostDialog({ open, onOpenChange, post, onSubmit }: EditPostD
                       <Upload className="w-5 h-5 text-[#0b5fff]" />
                     </div>
                     <div className="text-sm text-[#666]">Click to upload an image</div>
-                    <div className="text-xs text-[#999]">PNG, JPG, GIF up to 10MB</div>
+                    <div className="text-xs text-[#999]">PNG, JPG, GIF up to 1MB</div>
                   </div>
                 </label>
               </div>

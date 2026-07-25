@@ -13,6 +13,7 @@ export interface User {
   avatar?: string;
   graduationYear?: string;
   bio?: string;
+  joinDate?: string;
 }
 
 interface AuthContextType {
@@ -22,7 +23,7 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<{ success: boolean; message: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
-  updateUser: (updates: Partial<User>) => void;
+  updateUser: (updates: Partial<User>) => Promise<void>;
 }
 
 export interface RegisterData {
@@ -71,6 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     avatar: data.avatar_url,
     graduationYear: data.graduation_year,
     bio: data.bio,
+    joinDate: data.created_at,
   });
 
   const fetchProfile = async (userId: string) => {

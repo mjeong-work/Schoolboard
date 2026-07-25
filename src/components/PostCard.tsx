@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Heart, MessageCircle, Repeat2, Send, MoreHorizontal, BadgeCheck } from 'lucide-react';
+import { Heart, MessageCircle, Send, MoreHorizontal, BadgeCheck } from 'lucide-react';
+import { getAvatarColor } from '../utils/anonymousName';
 import { Button } from './ui/button';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Collapsible, CollapsibleContent } from './ui/collapsible';
 import { Input } from './ui/input';
 import { useData, type Post } from '../utils/dataContext';
 import { useAuth } from '../utils/authContext';
+import { useChat } from '../utils/chatContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +31,7 @@ export function PostCard({ post }: PostCardProps) {
     updatePost,
     isPostLiked
   } = useData();
+  const { getOrCreateConversation } = useChat();
 
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -80,6 +83,16 @@ export function PostCard({ post }: PostCardProps) {
     }
   };
 
+  const handleStartChat = async () => {
+    if (!user || isOwnPost) return;
+    try {
+      await getOrCreateConversation(post.authorId, post.author);
+      window.location.hash = '#messages';
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not start conversation. Please try again.');
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -97,7 +110,7 @@ export function PostCard({ post }: PostCardProps) {
       <div className="flex gap-3">
         {/* Avatar */}
         <div className="flex-shrink-0">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-white text-sm font-medium font-[Roboto]">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-medium font-[Roboto]" style={{ background: getAvatarColor(post.authorId) }}>
             {post.author.charAt(0)}
           </div>
         </div>
@@ -189,23 +202,17 @@ export function PostCard({ post }: PostCardProps) {
               <span className="text-sm text-[#999]">{post.comments.length}</span>
             </button>
 
-            <button 
-              className="flex items-center gap-1.5 p-2 hover:bg-black/5 rounded-full transition-colors group"
-            >
-              <Repeat2 
-                className="w-5 h-5 text-black/60 group-hover:text-green-500 transition-colors" 
-                strokeWidth={1.5}
-              />
-            </button>
-
-            <button 
-              className="flex items-center gap-1.5 p-2 hover:bg-black/5 rounded-full transition-colors group"
-            >
-              <Send 
-                className="w-5 h-5 text-black/60 group-hover:text-blue-500 transition-colors" 
-                strokeWidth={1.5}
-              />
-            </button>
+            {!isOwnPost && (
+              <button
+                onClick={handleStartChat}
+                className="flex items-center gap-1.5 p-2 hover:bg-black/5 rounded-full transition-colors group"
+              >
+                <Send
+                  className="w-5 h-5 text-black/60 group-hover:text-blue-500 transition-colors"
+                  strokeWidth={1.5}
+                />
+              </button>
+            )}
           </div>
 
           {/* Comments Section */}
@@ -213,7 +220,7 @@ export function PostCard({ post }: PostCardProps) {
             <CollapsibleContent className="mt-4 space-y-3">
               {/* Add Comment Input */}
               <div className="flex gap-2 pt-3 border-t border-[#f0f0f0]">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center text-white text-xs font-medium flex-shrink-0 font-[Roboto]">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0 font-[Roboto]" style={{ background: getAvatarColor(user?.id || '') }}>
                   {user?.name?.charAt(0) || 'A'}
                 </div>
                 <div className="flex-1 flex gap-2">
@@ -247,7 +254,7 @@ export function PostCard({ post }: PostCardProps) {
                     const isOwnComment = user?.id === comment.authorId;
                     return (
                       <div key={comment.id} className="flex gap-2 mt-[0px] mr-[0px] mb-[12px] ml-[-8px]">
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-500 to-gray-700 flex items-center justify-center text-white text-xs font-medium flex-shrink-0 font-[Roboto] m-[0px] mx-[0px] my-[3px]">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0 font-[Roboto] m-[0px] mx-[0px] my-[3px]" style={{ background: getAvatarColor(comment.authorId) }}>
                           {comment.author.charAt(0)}
                         </div>
                         

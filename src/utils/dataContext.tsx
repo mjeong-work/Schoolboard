@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './authContext';
 import { supabase } from './supabaseClient';
+import { getAnonymousName } from './anonymousName';
 
 export interface Comment {
   id: string;
@@ -38,6 +39,13 @@ export interface Event {
   author: string;
   authorId: string;
   category?: string;
+  // Google Maps location fields (optional; absent on events created before map integration)
+  locationName?: string;
+  locationAddress?: string;
+  locationLat?: number;
+  locationLng?: number;
+  googlePlaceId?: string;
+  locationRadiusMeters?: number;
 }
 
 export interface MarketplaceItem {
@@ -71,6 +79,7 @@ interface DataContextType {
   deleteCommentFromPost: (postId: string, commentId: string) => Promise<void>;
   isPostLiked: (postId: string) => boolean;
   addEvent: (event: Omit<Event, 'id' | 'likes' | 'comments' | 'participants' | 'authorId' | 'author'>) => Promise<void>;
+  updateEvent: (eventId: string, updates: Partial<Omit<Event, 'id' | 'likes' | 'comments' | 'participants' | 'authorId' | 'author'>>) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
   toggleLikeEvent: (eventId: string) => Promise<void>;
   addCommentToEvent: (eventId: string, text: string) => Promise<void>;
@@ -120,7 +129,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       content: p.content,
       image: p.image_url,
       category: p.category,
-      author: p.profiles?.name || 'Anonymous',
+      author: p.profiles?.name || getAnonymousName(p.author_id || p.id),
       authorId: p.author_id,
       verified: p.profiles?.verified || false,
       date: p.created_at?.split('T')[0],
@@ -128,7 +137,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       comments: (p.post_comments || []).map((c: any) => ({
         id: c.id,
         text: c.text,
-        author: c.profiles?.name || 'Anonymous',
+        author: c.profiles?.name || getAnonymousName(c.profiles?.id || c.user_id || c.id),
         authorId: c.profiles?.id || '',
         date: c.created_at?.split('T')[0],
       })),
@@ -159,7 +168,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       description: item.description,
       image: item.image_url || '',
       seller: {
-        name: item.profiles?.name || 'Unknown',
+        name: item.profiles?.name || getAnonymousName(item.seller_id),
         contact: item.contact,
         verified: item.profiles?.verified || false,
         id: item.seller_id,
@@ -280,8 +289,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteCommentFromPost = async (postId: string, commentId: string) => {
     if (!user) return;
-    const { error } = await supabase.from('post_comments').delete().eq('id', commentId);
-    if (error) console.error('[deleteCommentFromPost] Supabase error:', error);
+    const { data, error } = await supabase
+      .from('post_comments')
+      .delete()
+      .eq('id', commentId)
+      .select('id');
+    if (error) {
+      console.error('[deleteCommentFromPost] Supabase error:', error);
+      throw new Error(error.message);
+    }
+    if (!data || data.length === 0) {
+      console.warn('[deleteCommentFromPost] No rows deleted — RLS may be blocking for commentId:', commentId);
+      throw new Error('Delete was rejected — you may not have permission to delete this comment.');
+    }
     await fetchPosts();
   };
 
@@ -315,14 +335,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       description: e.description,
       image: e.image_url || '',
       category: e.category,
-      author: e.profiles?.name || 'Unknown',
+      locationName: e.location_name ?? undefined,
+      locationAddress: e.location_address ?? undefined,
+      locationLat: e.location_lat ?? undefined,
+      locationLng: e.location_lng ?? undefined,
+      googlePlaceId: e.google_place_id ?? undefined,
+      locationRadiusMeters: e.location_radius_meters ?? 300,
+      author: e.profiles?.name || getAnonymousName(e.author_id || e.id),
       authorId: e.author_id,
       participants: (e.event_rsvps || []).map((r: any) => r.user_id),
       likes: (e.event_likes || []).map((l: any) => l.user_id),
       comments: (e.event_comments || []).map((c: any) => ({
         id: c.id,
         text: c.text,
-        author: c.profiles?.name || 'Anonymous',
+        author: c.profiles?.name || getAnonymousName(c.profiles?.id || c.user_id || c.id),
         authorId: c.profiles?.id || '',
         date: c.created_at?.split('T')[0],
       })),
@@ -342,9 +368,43 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       description: eventData.description,
       image_url: eventData.image || null,
       category: eventData.category ?? null,
+      location_name: eventData.locationName ?? null,
+      location_address: eventData.locationAddress ?? null,
+      location_lat: eventData.locationLat ?? null,
+      location_lng: eventData.locationLng ?? null,
+      google_place_id: eventData.googlePlaceId ?? null,
+      ...(eventData.locationRadiusMeters !== undefined && {
+        location_radius_meters: eventData.locationRadiusMeters,
+      }),
       author_id: user.id,
     });
     if (error) { console.error('[addEvent]', error); throw new Error(error.message); }
+    await fetchEvents();
+  };
+
+  const updateEvent = async (
+    eventId: string,
+    updates: Partial<Omit<Event, 'id' | 'likes' | 'comments' | 'participants' | 'authorId' | 'author'>>
+  ) => {
+    if (!user) throw new Error('Not authenticated');
+    const dbUpdates: Record<string, any> = {};
+    if (updates.title !== undefined) dbUpdates.title = updates.title;
+    if (updates.date !== undefined) dbUpdates.date = updates.date;
+    if (updates.time !== undefined) dbUpdates.time = updates.time;
+    if (updates.venue !== undefined) dbUpdates.venue = updates.venue;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.image !== undefined) dbUpdates.image_url = updates.image || null;
+    if (updates.category !== undefined) dbUpdates.category = updates.category;
+    if ('locationName' in updates) dbUpdates.location_name = updates.locationName ?? null;
+    if ('locationAddress' in updates) dbUpdates.location_address = updates.locationAddress ?? null;
+    if ('locationLat' in updates) dbUpdates.location_lat = updates.locationLat ?? null;
+    if ('locationLng' in updates) dbUpdates.location_lng = updates.locationLng ?? null;
+    if ('googlePlaceId' in updates) dbUpdates.google_place_id = updates.googlePlaceId ?? null;
+    if (updates.locationRadiusMeters !== undefined)
+      dbUpdates.location_radius_meters = updates.locationRadiusMeters;
+
+    const { error } = await supabase.from('events').update(dbUpdates).eq('id', eventId);
+    if (error) { console.error('[updateEvent]', error); throw new Error(error.message); }
     await fetchEvents();
   };
 
@@ -472,7 +532,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <DataContext.Provider value={{
       posts, events, marketplaceItems,
       addPost, updatePost, deletePost, toggleLikePost, addCommentToPost, deleteCommentFromPost, isPostLiked,
-      addEvent, deleteEvent, toggleLikeEvent, addCommentToEvent, toggleRSVPEvent, isEventLiked, hasRSVPed,
+      addEvent, updateEvent, deleteEvent, toggleLikeEvent, addCommentToEvent, toggleRSVPEvent, isEventLiked, hasRSVPed,
       addMarketplaceItem, deleteMarketplaceItem, toggleSaveItem, incrementItemViews, isItemSaved,
       getUserPosts, getUserEvents, getUserMarketplaceItems, getUserSavedItems, getUserStats,
     }}>
