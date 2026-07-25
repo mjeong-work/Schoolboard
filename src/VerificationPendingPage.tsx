@@ -4,7 +4,7 @@ import { Button } from './components/ui/button';
 import { Clock, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 
 export default function VerificationPendingPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -14,20 +14,10 @@ export default function VerificationPendingPage() {
     }
   }, [user]);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    // Simulate checking status
-    setTimeout(() => {
-      setRefreshing(false);
-      // Force re-check by reloading user from storage
-      const currentUser = localStorage.getItem('campusconnect_currentUser');
-      if (currentUser) {
-        const userData = JSON.parse(currentUser);
-        if (userData.status === 'approved') {
-          window.location.hash = '#/community';
-        }
-      }
-    }, 1000);
+    await refreshUser();
+    setRefreshing(false);
   };
 
   const handleLogout = () => {

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { useAuth } from './authContext';
 import { supabase } from './supabaseClient';
 
@@ -171,7 +171,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // ── getOrCreateConversation ───────────────────────────────────────────
-  const getOrCreateConversation = async (
+  const getOrCreateConversation = useCallback(async (
     otherUserId: string,
     otherUserName: string,
     context?: Conversation['context']
@@ -248,10 +248,10 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     setConversations((prev) => [conversation, ...prev]);
     return newId;
-  };
+  }, [currentUser, conversations]);
 
   // ── sendMessage (optimistic) ──────────────────────────────────────────
-  const sendMessage = (conversationId: string, content: string, imageUrl?: string) => {
+  const sendMessage = useCallback((conversationId: string, content: string, imageUrl?: string) => {
     if (!currentUser) return;
 
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
@@ -302,10 +302,10 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           );
         }
       });
-  };
+  }, [currentUser]);
 
   // ── markAsRead ────────────────────────────────────────────────────────
-  const markAsRead = (conversationId: string) => {
+  const markAsRead = useCallback((conversationId: string) => {
     if (!currentUser) return;
 
     setMessages((prev) =>
@@ -330,24 +330,24 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .then(({ error }) => {
         if (error) console.error('[markAsRead]', error.message);
       });
-  };
+  }, [currentUser]);
 
   // ── getConversationMessages ───────────────────────────────────────────
-  const getConversationMessages = (conversationId: string): Message[] =>
+  const getConversationMessages = useCallback((conversationId: string): Message[] =>
     messages
       .filter((m) => m.conversationId === conversationId)
-      .sort((a, b) => a.timestamp - b.timestamp);
+      .sort((a, b) => a.timestamp - b.timestamp), [messages]);
 
   // ── getConversation ───────────────────────────────────────────────────
-  const getConversation = (conversationId: string): Conversation | undefined =>
-    conversations.find((c) => c.id === conversationId);
+  const getConversation = useCallback((conversationId: string): Conversation | undefined =>
+    conversations.find((c) => c.id === conversationId), [conversations]);
 
   // ── getTotalUnreadCount ───────────────────────────────────────────────
-  const getTotalUnreadCount = (): number =>
-    conversations.reduce((sum, conv) => sum + conv.unreadCount, 0);
+  const getTotalUnreadCount = useCallback((): number =>
+    conversations.reduce((sum, conv) => sum + conv.unreadCount, 0), [conversations]);
 
   // ── deleteConversation ────────────────────────────────────────────────
-  const deleteConversation = (conversationId: string) => {
+  const deleteConversation = useCallback((conversationId: string) => {
     setConversations((prev) => prev.filter((c) => c.id !== conversationId));
     setMessages((prev) => prev.filter((m) => m.conversationId !== conversationId));
 
@@ -358,25 +358,34 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .then(({ error }) => {
         if (error) console.error('[deleteConversation]', error.message);
       });
-  };
+  }, []);
 
-  return (
-    <ChatContext.Provider
-      value={{
-        conversations,
-        messages,
-        getOrCreateConversation,
-        sendMessage,
-        markAsRead,
-        getConversationMessages,
-        getConversation,
-        getTotalUnreadCount,
-        deleteConversation,
-      }}
-    >
-      {children}
-    </ChatContext.Provider>
+  const value = useMemo(
+    () => ({
+      conversations,
+      messages,
+      getOrCreateConversation,
+      sendMessage,
+      markAsRead,
+      getConversationMessages,
+      getConversation,
+      getTotalUnreadCount,
+      deleteConversation,
+    }),
+    [
+      conversations,
+      messages,
+      getOrCreateConversation,
+      sendMessage,
+      markAsRead,
+      getConversationMessages,
+      getConversation,
+      getTotalUnreadCount,
+      deleteConversation,
+    ]
   );
+
+  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 };
 
 export const useChat = () => {

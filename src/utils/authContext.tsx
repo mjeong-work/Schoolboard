@@ -24,6 +24,7 @@ interface AuthContextType {
   register: (data: RegisterData) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 export interface RegisterData {
@@ -163,6 +164,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  const refreshUser = async () => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser) await fetchProfile(authUser.id);
+  };
+
   const updateUser = async (updates: Partial<User>) => {
     if (!user) return;
 
@@ -181,7 +187,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, currentUser: user, isAuthenticated: !!user, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, currentUser: user, isAuthenticated: !!user, login, register, logout, updateUser, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
