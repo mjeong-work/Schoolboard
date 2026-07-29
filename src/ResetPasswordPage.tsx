@@ -1,34 +1,38 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { supabase } from './utils/supabaseClient';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
 
-export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState('');
+export default function ResetPasswordPage() {
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async () => {
     setError('');
-    if (!email.trim()) {
-      setError('Please enter your email address.');
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
       return;
     }
-    setLoading(true);
-    // No app hash here: Supabase appends its own "#access_token=...&type=recovery"
-    // fragment to this URL, and a URL can only have one fragment. App.tsx detects
-    // "type=recovery" in the resulting hash and routes to ResetPasswordPage itself.
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}${window.location.pathname}`,
-    });
-    setLoading(false);
-    if (resetError) {
-      setError(resetError.message);
-    } else {
-      setSent(true);
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
     }
+
+    setLoading(true);
+    const { error: updateError } = await supabase.auth.updateUser({ password });
+    setLoading(false);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setDone(true);
+    await supabase.auth.signOut();
   };
 
   return (
@@ -36,31 +40,41 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-[#111] mb-2">Campus Connect</h1>
-          <p className="text-[#666]">Reset your password</p>
+          <p className="text-[#666]">Set a new password</p>
         </div>
 
         <div className="bg-white border border-[#e5e5e5] rounded-xl p-8 space-y-4">
-          {sent ? (
+          {done ? (
             <div className="text-center space-y-4">
               <p className="text-sm text-[#333]">
-                If an account exists for <strong>{email}</strong>, a password reset link has been sent. Check your inbox.
+                Your password has been updated. Please sign in with your new password.
               </p>
               <Button
                 onClick={() => (window.location.hash = '#/login')}
                 className="w-full bg-[#0b5fff] hover:bg-[#0a4ecc]"
               >
-                Back to Sign In
+                Go to Sign In
               </Button>
             </div>
           ) : (
             <>
               <div className="space-y-2">
-                <Label>Email address</Label>
+                <Label>New password</Label>
                 <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="password"
+                  placeholder="At least 6 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Confirm new password</Label>
+                <Input
+                  type="password"
+                  placeholder="Re-enter password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                 />
               </div>
@@ -76,17 +90,8 @@ export default function ForgotPasswordPage() {
                 disabled={loading}
                 className="w-full bg-[#0b5fff] hover:bg-[#0a4ecc]"
               >
-                {loading ? 'Sending...' : 'Send Reset Link'}
+                {loading ? 'Updating...' : 'Update Password'}
               </Button>
-
-              <div className="text-center">
-                <button
-                  onClick={() => (window.location.hash = '#/login')}
-                  className="text-sm text-[#666] hover:text-[#0b5fff] hover:underline"
-                >
-                  Back to Sign In
-                </button>
-              </div>
             </>
           )}
         </div>

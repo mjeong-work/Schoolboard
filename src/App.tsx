@@ -11,6 +11,7 @@ import EditProfilePage from "./EditProfilePage";
 import RegisterPage from "./RegisterPage";
 import LoginPage from "./LoginPage";
 import ForgotPasswordPage from "./ForgotPasswordPage";
+import ResetPasswordPage from "./ResetPasswordPage";
 import VerificationPendingPage from "./VerificationPendingPage";
 import { MessagesPage } from "./components/MessagesPage";
 import { ChatManager } from "./components/ChatManager";
@@ -27,7 +28,8 @@ type PageType =
   | "register"
   | "verification"
   | "login"
-  | "forgot-password";
+  | "forgot-password"
+  | "reset-password";
 
 function AppRouter() {
   const { user, isAuthenticated } = useAuth();
@@ -35,6 +37,15 @@ function AppRouter() {
 
   useEffect(() => {
     const handleHashChange = () => {
+      // Supabase password-recovery links redirect back with
+      // "#access_token=...&type=recovery" tacked onto the URL (a URL can only
+      // have one fragment, so this can't coexist with our own "#/reset-password"
+      // hash route). Detect it directly instead of relying on hash routing.
+      if (window.location.hash.includes("type=recovery")) {
+        setCurrentPage("reset-password");
+        return;
+      }
+
       const hash = window.location.hash
         .slice(1)
         .replace("/", "");
@@ -47,6 +58,14 @@ function AppRouter() {
 
       if (hash === "forgot-password") {
         setCurrentPage("forgot-password");
+        return;
+      }
+
+      // Password recovery links land here. Supabase auto-establishes a
+      // temporary session from the recovery token, which would otherwise
+      // make the checks below treat this as a normal authenticated visit.
+      if (hash === "reset-password") {
+        setCurrentPage("reset-password");
         return;
       }
 
@@ -119,6 +138,10 @@ function AppRouter() {
 
   if (currentPage === "forgot-password") {
     return <ForgotPasswordPage />;
+  }
+
+  if (currentPage === "reset-password") {
+    return <ResetPasswordPage />;
   }
 
   if (currentPage === "verification") {
