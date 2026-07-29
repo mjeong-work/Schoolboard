@@ -34,21 +34,33 @@ type PageType =
 function AppRouter() {
   const { user, isAuthenticated } = useAuth();
   const [currentPage, setCurrentPage] = useState<PageType>("login");
+  // Sticky flag: recovering the password establishes a temporary session,
+  // which flips isAuthenticated to true and would otherwise make the routing
+  // below treat the visit as a normal login and bounce straight to the app
+  // before the user gets to set a new password. Once set, this only clears
+  // when the user explicitly leaves (e.g. "Go to Sign In" -> #/login).
+  const [isRecovering, setIsRecovering] = useState(false);
 
   useEffect(() => {
     const handleHashChange = () => {
-      // Supabase password-recovery links redirect back with
-      // "#access_token=...&type=recovery" tacked onto the URL (a URL can only
-      // have one fragment, so this can't coexist with our own "#/reset-password"
-      // hash route). Detect it directly instead of relying on hash routing.
-      if (window.location.hash.includes("type=recovery")) {
+      const rawHash = window.location.hash;
+      const hash = rawHash.slice(1).replace("/", "");
+      const recoveryArtifact = rawHash.includes("type=recovery");
+
+      // Supabase clears the "#access_token=...&type=recovery" fragment via
+      // history.replaceState once the session is established, leaving an
+      // empty hash. Treat that empty hash as "still recovering" too, so the
+      // page doesn't flip away the instant isAuthenticated turns true (from
+      // the temporary recovery session) but before the user set a password.
+      // Any *explicit* navigation (login, forgot-password, ...) still wins.
+      if ((isRecovering || recoveryArtifact) && (hash === "" || recoveryArtifact)) {
+        if (!isRecovering) setIsRecovering(true);
         setCurrentPage("reset-password");
         return;
       }
-
-      const hash = window.location.hash
-        .slice(1)
-        .replace("/", "");
+      if (isRecovering) {
+        setIsRecovering(false);
+      }
 
       // Auth pages (accessible when not authenticated)
       if (hash === "register") {
@@ -58,14 +70,6 @@ function AppRouter() {
 
       if (hash === "forgot-password") {
         setCurrentPage("forgot-password");
-        return;
-      }
-
-      // Password recovery links land here. Supabase auto-establishes a
-      // temporary session from the recovery token, which would otherwise
-      // make the checks below treat this as a normal authenticated visit.
-      if (hash === "reset-password") {
-        setCurrentPage("reset-password");
         return;
       }
 
@@ -125,7 +129,7 @@ function AppRouter() {
 
     return () =>
       window.removeEventListener("hashchange", handleHashChange);
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, isRecovering]);
 
   // Render appropriate page
   if (currentPage === "login") {

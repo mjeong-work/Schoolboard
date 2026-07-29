@@ -1,15 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from './utils/supabaseClient';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
 
+type LinkStatus = 'checking' | 'valid' | 'invalid';
+
 export default function ResetPasswordPage() {
+  const [linkStatus, setLinkStatus] = useState<LinkStatus>('checking');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    // Recovery links can arrive without a usable session: the token was
+    // already consumed (many mail providers pre-fetch links to scan them,
+    // which burns the one-time recovery token) or it simply expired. Check
+    // upfront instead of letting the user fill out the form and hit a
+    // confusing "Auth session missing" error on submit.
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#\/?/, ''));
+    if (hashParams.get('error')) {
+      setLinkStatus('invalid');
+      return;
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setLinkStatus(session ? 'valid' : 'invalid');
+    });
+  }, []);
 
   const handleSubmit = async () => {
     setError('');
@@ -44,7 +64,27 @@ export default function ResetPasswordPage() {
         </div>
 
         <div className="bg-white border border-[#e5e5e5] rounded-xl p-8 space-y-4">
-          {done ? (
+          {linkStatus === 'checking' && (
+            <p className="text-sm text-[#666] text-center">Verifying your reset link…</p>
+          )}
+
+          {linkStatus === 'invalid' && (
+            <div className="text-center space-y-4">
+              <p className="text-sm text-[#333]">
+                This reset link is invalid or has expired. Some email providers pre-open links to
+                scan them, which can use up a one-time reset link before you click it. Please
+                request a new one.
+              </p>
+              <Button
+                onClick={() => (window.location.hash = '#/forgot-password')}
+                className="w-full bg-[#0b5fff] hover:bg-[#0a4ecc]"
+              >
+                Request a New Link
+              </Button>
+            </div>
+          )}
+
+          {linkStatus === 'valid' && (done ? (
             <div className="text-center space-y-4">
               <p className="text-sm text-[#333]">
                 Your password has been updated. Please sign in with your new password.
@@ -93,7 +133,7 @@ export default function ResetPasswordPage() {
                 {loading ? 'Updating...' : 'Update Password'}
               </Button>
             </>
-          )}
+          ))}
         </div>
       </div>
     </div>
