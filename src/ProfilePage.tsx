@@ -159,7 +159,7 @@ export default function ProfilePage() {
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-[#f0f0f0]">
+              <div className="grid grid-cols-4 gap-2 sm:gap-4 pt-4 border-t border-[#f0f0f0]">
                 <div className="text-center">
                   <div className="text-xl font-bold text-[#111] mb-1 font-[Roboto]">{stats.posts}</div>
                   <div className="text-sm text-[#666] font-[Roboto]">Posts</div>
