@@ -1,18 +1,58 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { NavigationBar } from './components/NavigationBar';
 import { Card } from './components/ui/card';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
 import { Textarea } from './components/ui/textarea';
-import { Checkbox } from './components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
-import { Separator } from './components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from './components/ui/avatar';
-import { ArrowLeft, Upload } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import { useAuth } from './utils/authContext';
 import { supabase } from './utils/supabaseClient';
 import { toast } from 'sonner@2.0.3';
+
+const BIO_MAX_LENGTH = 240;
+const AVATAR_MAX_DIMENSION = 512;
+
+// Graduation year options span from 6 years back (alumni still updating
+// their profile) to 6 years ahead (incoming students), recomputed against
+// the current year instead of a hardcoded range that goes stale.
+const currentYear = new Date().getFullYear();
+const graduationYearOptions = Array.from({ length: 13 }, (_, i) => currentYear + 6 - i);
+
+// Avatars render at ~96px max, so there's no reason to upload a multi-MB
+// phone photo as-is. Downscale to a small square-ish JPEG client-side
+// before it ever touches Supabase Storage.
+function compressImage(file: File, maxDimension = AVATAR_MAX_DIMENSION, quality = 0.85): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      URL.revokeObjectURL(objectUrl);
+      if (!ctx) {
+        reject(new Error('Canvas not supported'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error('Image compression failed'))),
+        'image/jpeg',
+        quality
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Could not read image'));
+    };
+    img.src = objectUrl;
+  });
+}
 
 export default function EditProfilePage() {
   const { user, updateUser } = useAuth();
@@ -23,46 +63,21 @@ export default function EditProfilePage() {
     bio: user?.bio || '',
     major: user?.department || '',
     graduationYear: user?.graduationYear || '',
-    location: '',
-    townCommunity: '',
-    avatar: user?.avatar || ''
   });
 
+  const [avatarPreview, setAvatarPreview] = useState(user?.avatar || '');
+  const [pendingAvatarBlob, setPendingAvatarBlob] = useState<Blob | null>(null);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [processingPhoto, setProcessingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [interests, setInterests] = useState({
-    school: true,
-    academics: false,
-    sports: false,
-    arts: false,
-    technology: false,
-    music: false,
-    volunteering: false,
-    career: false,
-    socialEvents: false,
-    foodDining: false,
-    fitness: false,
-    gaming: false
-  });
-
-  const [communities, setCommunities] = useState({
-    currentStudents: false,
-    alumni: false,
-    gradStudents: false,
-    international: false,
-    localResidents: false,
-    campusOrganizations: false
-  });
-
-  const handleInterestToggle = (key: string) => {
-    setInterests(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const handleCommunityToggle = (key: string) => {
-    setCommunities(prev => ({ ...prev, [key]: !prev[key] }));
-  };
+  // The preview can be a local blob: URL while a new photo is pending;
+  // release it on unmount / replacement so it doesn't leak memory.
+  useEffect(() => {
+    return () => {
+      if (avatarPreview.startsWith('blob:')) URL.revokeObjectURL(avatarPreview);
+    };
+  }, [avatarPreview]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -74,7 +89,7 @@ export default function EditProfilePage() {
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file) return;
 
     if (!file.type.startsWith('image/')) {
       toast.error('Please select an image file.');
@@ -85,40 +100,60 @@ export default function EditProfilePage() {
       return;
     }
 
-    setUploading(true);
+    setProcessingPhoto(true);
     try {
-      // Store as {userId} — fixed path so upsert always replaces the same object
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(user.id, file, { upsert: true, contentType: file.type });
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(user.id);
-
-      // Append a timestamp to bust the CDN cache for the same path
-      const freshUrl = `${publicUrl}?t=${Date.now()}`;
-      setFormData(prev => ({ ...prev, avatar: freshUrl }));
+      const compressed = await compressImage(file);
+      if (avatarPreview.startsWith('blob:')) URL.revokeObjectURL(avatarPreview);
+      setPendingAvatarBlob(compressed);
+      setAvatarPreview(URL.createObjectURL(compressed));
     } catch (err: any) {
-      toast.error(err?.message || 'Upload failed. Please try again.');
+      toast.error(err?.message || 'Could not process that image.');
     } finally {
-      setUploading(false);
+      setProcessingPhoto(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const handleSave = async () => {
+    if (!user) return;
     setSaving(true);
-    await updateUser({
+
+    // Only touch Storage if the user actually picked a new photo — the old
+    // upload-on-select flow overwrote the stored avatar immediately, so
+    // clicking Cancel afterward couldn't undo it. Uploading here means
+    // nothing is written until Save succeeds.
+    let avatarUrl = user.avatar || '';
+    if (pendingAvatarBlob) {
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(user.id, pendingAvatarBlob, { upsert: true, contentType: 'image/jpeg' });
+
+      if (uploadError) {
+        toast.error(uploadError.message || 'Photo upload failed.');
+        setSaving(false);
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(user.id);
+      avatarUrl = `${publicUrl}?t=${Date.now()}`;
+    }
+
+    const { error } = await updateUser({
       name: formData.name,
       bio: formData.bio,
       department: formData.major,
       graduationYear: formData.graduationYear || undefined,
-      avatar: formData.avatar || undefined,
+      avatar: avatarUrl || undefined,
     });
+
     setSaving(false);
+
+    if (error) {
+      toast.error(error.message || 'Failed to save changes. Please try again.');
+      return;
+    }
+
+    toast.success('Profile updated.');
     window.location.hash = 'profile';
   };
 
@@ -135,7 +170,7 @@ export default function EditProfilePage() {
         {/* Header */}
         <div className="mb-5">
           <h1 className="text-[#111] mb-1 font-[Bayon]">EDIT PROFILE</h1>
-          <p className="text-[#666] font-[Roboto]">Update your personal information and preferences</p>
+          <p className="text-[#666] font-[Roboto]">Update your personal information</p>
         </div>
 
         <div className="space-y-6">
@@ -148,7 +183,7 @@ export default function EditProfilePage() {
               {/* Left: Avatar Upload */}
               <div className="flex flex-col items-center gap-3">
                 <Avatar className="w-20 h-20 border-2 border-white shadow-sm">
-                  <AvatarImage src={formData.avatar} alt={formData.name} />
+                  <AvatarImage src={avatarPreview} alt={formData.name} />
                   <AvatarFallback className="text-xl bg-[#6366f1] text-white font-[Roboto]">
                     {formData.name.split(' ').map(n => n[0]).join('') || '?'}
                   </AvatarFallback>
@@ -156,11 +191,11 @@ export default function EditProfilePage() {
                 <Button
                   type="button"
                   onClick={handleAvatarClick}
-                  disabled={uploading || saving}
+                  disabled={processingPhoto || saving}
                   className="bg-white border border-[#f0f0f0] text-[#111] hover:bg-[#fafafa] px-4 py-2 rounded-lg gap-2 font-[Roboto] text-sm"
                 >
                   <Upload className="w-4 h-4" />
-                  {uploading ? 'Uploading…' : 'Upload Photo'}
+                  {processingPhoto ? 'Processing…' : 'Upload Photo'}
                 </Button>
                 <input
                   ref={fileInputRef}
@@ -197,11 +232,17 @@ export default function EditProfilePage() {
             </div>
 
             <div className="mb-4">
-              <Label htmlFor="bio" className="text-[#666] mb-2 block font-[Roboto]">Bio</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label htmlFor="bio" className="text-[#666] font-[Roboto]">Bio</Label>
+                <span className="text-xs text-[#999] font-[Roboto]">
+                  {formData.bio.length}/{BIO_MAX_LENGTH}
+                </span>
+              </div>
               <Textarea
                 id="bio"
                 value={formData.bio}
-                onChange={(e) => handleInputChange('bio', e.target.value)}
+                onChange={(e) => handleInputChange('bio', e.target.value.slice(0, BIO_MAX_LENGTH))}
+                maxLength={BIO_MAX_LENGTH}
                 className="border-[#f0f0f0] rounded-lg min-h-[100px] font-[Roboto]"
                 placeholder="Tell us about yourself..."
               />
@@ -226,7 +267,7 @@ export default function EditProfilePage() {
                     <SelectValue placeholder="Select year" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Array.from({ length: 2029 - 1990 + 1 }, (_, i) => 2029 - i).map(year => (
+                    {graduationYearOptions.map(year => (
                       <SelectItem key={year} value={String(year)}>{year}</SelectItem>
                     ))}
                   </SelectContent>
@@ -235,216 +276,18 @@ export default function EditProfilePage() {
             </div>
           </Card>
 
-          {/* Location Settings */}
-          <Card className="p-6 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px]">
-            <h2 className="text-[#111] mb-4 font-[Roboto] font-bold">Location Settings</h2>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="location" className="text-[#666] mb-2 block font-[Roboto]">Campus Location</Label>
-                <Select value={formData.location} onValueChange={(value) => handleInputChange('location', value)}>
-                  <SelectTrigger className="border-[#f0f0f0] rounded-lg font-[Roboto]">
-                    <SelectValue placeholder="Select location" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="North Campus">North Campus</SelectItem>
-                    <SelectItem value="South Campus">South Campus</SelectItem>
-                    <SelectItem value="East Campus">East Campus</SelectItem>
-                    <SelectItem value="West Campus">West Campus</SelectItem>
-                    <SelectItem value="Off Campus">Off Campus</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="townCommunity" className="text-[#666] mb-2 block font-[Roboto]">Town / Community</Label>
-                <Select value={formData.townCommunity} onValueChange={(value) => handleInputChange('townCommunity', value)}>
-                  <SelectTrigger className="border-[#f0f0f0] rounded-lg font-[Roboto]">
-                    <SelectValue placeholder="Select community" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Downtown Area">Downtown Area</SelectItem>
-                    <SelectItem value="University District">University District</SelectItem>
-                    <SelectItem value="Suburban Area">Suburban Area</SelectItem>
-                    <SelectItem value="City Center">City Center</SelectItem>
-                    <SelectItem value="Historic District">Historic District</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </Card>
-
-          {/* Community Preferences */}
-          <Card className="p-6 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px]">
-            <h2 className="text-[#111] mb-2 font-[Roboto] font-bold">Community Preferences</h2>
-            <p className="text-sm text-[#666] mb-4 font-[Roboto]">Select the communities you want to engage with</p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex items-start gap-3">
-                <Checkbox id="currentStudents" checked={communities.currentStudents} onCheckedChange={() => handleCommunityToggle('currentStudents')} className="mt-1" />
-                <div>
-                  <Label htmlFor="currentStudents" className="text-[#111] cursor-pointer font-[Roboto]">Current Students</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Connect with fellow students</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="alumni" checked={communities.alumni} onCheckedChange={() => handleCommunityToggle('alumni')} className="mt-1" />
-                <div>
-                  <Label htmlFor="alumni" className="text-[#111] cursor-pointer font-[Roboto]">Alumni Network</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Stay connected with graduates</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="gradStudents" checked={communities.gradStudents} onCheckedChange={() => handleCommunityToggle('gradStudents')} className="mt-1" />
-                <div>
-                  <Label htmlFor="gradStudents" className="text-[#111] cursor-pointer font-[Roboto]">Graduate Students</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Graduate-level connections</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="international" checked={communities.international} onCheckedChange={() => handleCommunityToggle('international')} className="mt-1" />
-                <div>
-                  <Label htmlFor="international" className="text-[#111] cursor-pointer font-[Roboto]">International Students</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Global campus community</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="localResidents" checked={communities.localResidents} onCheckedChange={() => handleCommunityToggle('localResidents')} className="mt-1" />
-                <div>
-                  <Label htmlFor="localResidents" className="text-[#111] cursor-pointer font-[Roboto]">Local Residents</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Engage with local community</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="campusOrganizations" checked={communities.campusOrganizations} onCheckedChange={() => handleCommunityToggle('campusOrganizations')} className="mt-1" />
-                <div>
-                  <Label htmlFor="campusOrganizations" className="text-[#111] cursor-pointer font-[Roboto]">Campus Organizations</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Join student groups and clubs</p>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* Interest Preferences */}
-          <Card className="p-6 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px]">
-            <h2 className="text-[#111] mb-2 font-[Roboto] font-bold">Interest Preferences</h2>
-            <p className="text-sm text-[#666] mb-4 font-[Roboto]">Customize your feed by selecting topics you're interested in</p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="flex items-start gap-3">
-                <Checkbox id="school" checked={interests.school} onCheckedChange={() => handleInterestToggle('school')} className="mt-1" disabled />
-                <div>
-                  <Label htmlFor="school" className="text-[#111] cursor-pointer font-[Roboto]">School & Campus</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Required</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="academics" checked={interests.academics} onCheckedChange={() => handleInterestToggle('academics')} className="mt-1" />
-                <div>
-                  <Label htmlFor="academics" className="text-[#111] cursor-pointer font-[Roboto]">Academics</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Study groups, resources</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="sports" checked={interests.sports} onCheckedChange={() => handleInterestToggle('sports')} className="mt-1" />
-                <div>
-                  <Label htmlFor="sports" className="text-[#111] cursor-pointer font-[Roboto]">Sports & Recreation</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Campus athletics, teams</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="arts" checked={interests.arts} onCheckedChange={() => handleInterestToggle('arts')} className="mt-1" />
-                <div>
-                  <Label htmlFor="arts" className="text-[#111] cursor-pointer font-[Roboto]">Arts & Culture</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Theater, galleries, exhibits</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="technology" checked={interests.technology} onCheckedChange={() => handleInterestToggle('technology')} className="mt-1" />
-                <div>
-                  <Label htmlFor="technology" className="text-[#111] cursor-pointer font-[Roboto]">Technology</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Tech talks, hackathons</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="music" checked={interests.music} onCheckedChange={() => handleInterestToggle('music')} className="mt-1" />
-                <div>
-                  <Label htmlFor="music" className="text-[#111] cursor-pointer font-[Roboto]">Music</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Concerts, performances</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="volunteering" checked={interests.volunteering} onCheckedChange={() => handleInterestToggle('volunteering')} className="mt-1" />
-                <div>
-                  <Label htmlFor="volunteering" className="text-[#111] cursor-pointer font-[Roboto]">Volunteering</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Community service</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="career" checked={interests.career} onCheckedChange={() => handleInterestToggle('career')} className="mt-1" />
-                <div>
-                  <Label htmlFor="career" className="text-[#111] cursor-pointer font-[Roboto]">Career & Networking</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Job fairs, mentorship</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="socialEvents" checked={interests.socialEvents} onCheckedChange={() => handleInterestToggle('socialEvents')} className="mt-1" />
-                <div>
-                  <Label htmlFor="socialEvents" className="text-[#111] cursor-pointer font-[Roboto]">Social Events</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Parties, meetups</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="foodDining" checked={interests.foodDining} onCheckedChange={() => handleInterestToggle('foodDining')} className="mt-1" />
-                <div>
-                  <Label htmlFor="foodDining" className="text-[#111] cursor-pointer font-[Roboto]">Food & Dining</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Restaurants, food events</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="fitness" checked={interests.fitness} onCheckedChange={() => handleInterestToggle('fitness')} className="mt-1" />
-                <div>
-                  <Label htmlFor="fitness" className="text-[#111] cursor-pointer font-[Roboto]">Fitness & Wellness</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Gym, yoga, health</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Checkbox id="gaming" checked={interests.gaming} onCheckedChange={() => handleInterestToggle('gaming')} className="mt-1" />
-                <div>
-                  <Label htmlFor="gaming" className="text-[#111] cursor-pointer font-[Roboto]">Gaming</Label>
-                  <p className="text-xs text-[#666] font-[Roboto]">Esports, game nights</p>
-                </div>
-              </div>
-            </div>
-          </Card>
-
           {/* Action Buttons */}
           <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
             <Button
               onClick={handleCancel}
+              disabled={saving}
               className="bg-white border border-[#f0f0f0] text-[#111] hover:bg-[#fafafa] px-6 py-2 rounded-lg font-[Roboto]"
             >
               Cancel
             </Button>
             <Button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || processingPhoto}
               className="bg-[rgb(0,0,0)] hover:bg-[#4f46e5] text-white px-6 py-2 rounded-lg shadow-sm font-[Roboto]"
             >
               {saving ? 'Saving…' : 'Save Changes'}

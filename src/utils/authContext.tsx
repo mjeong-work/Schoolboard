@@ -23,7 +23,7 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<{ success: boolean; message: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
-  updateUser: (updates: Partial<User>) => Promise<void>;
+  updateUser: (updates: Partial<User>) => Promise<{ error: { message: string } | null }>;
   refreshUser: () => Promise<void>;
 }
 
@@ -170,7 +170,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateUser = async (updates: Partial<User>) => {
-    if (!user) return;
+    if (!user) return { error: { message: 'Not authenticated' } };
 
     const { error } = await supabase.from('profiles').update({
       name: updates.name,
@@ -184,6 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!error) {
       setUser({ ...user, ...updates });
     }
+    return { error };
   };
 
   return (

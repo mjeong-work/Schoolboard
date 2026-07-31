@@ -71,6 +71,7 @@ interface DataContextType {
   posts: Post[];
   events: Event[];
   marketplaceItems: MarketplaceItem[];
+  isLoading: boolean;
   addPost: (post: Omit<Post, 'id' | 'date' | 'likes' | 'comments' | 'authorId' | 'author' | 'verified'>) => Promise<void>;
   updatePost: (postId: string, updates: { title?: string; content?: string; image?: string | null; category?: string }) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
@@ -95,7 +96,7 @@ interface DataContextType {
   getUserEvents: () => Event[];
   getUserMarketplaceItems: () => MarketplaceItem[];
   getUserSavedItems: () => MarketplaceItem[];
-  getUserStats: () => { posts: number; eventsAttended: number; itemsSold: number; savedItems: number };
+  getUserStats: () => { posts: number; eventsAttended: number; listings: number; savedItems: number };
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -105,6 +106,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [posts, setPosts] = useState<Post[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [marketplaceItems, setMarketplaceItems] = useState<MarketplaceItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Fetch posts from Supabase
   const fetchPosts = async () => {
@@ -183,9 +185,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (user) {
-      fetchPosts();
-      fetchEvents();
-      fetchMarketplaceItems();
+      setIsLoading(true);
+      Promise.all([fetchPosts(), fetchEvents(), fetchMarketplaceItems()]).finally(() => setIsLoading(false));
+    } else {
+      setIsLoading(false);
     }
   }, [user]);
 
@@ -524,13 +527,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const getUserStats = () => ({
     posts: getUserPosts().length,
     eventsAttended: getUserEvents().length,
-    itemsSold: getUserMarketplaceItems().length,
+    listings: getUserMarketplaceItems().length,
     savedItems: getUserSavedItems().length,
   });
 
   return (
     <DataContext.Provider value={{
-      posts, events, marketplaceItems,
+      posts, events, marketplaceItems, isLoading,
       addPost, updatePost, deletePost, toggleLikePost, addCommentToPost, deleteCommentFromPost, isPostLiked,
       addEvent, updateEvent, deleteEvent, toggleLikeEvent, addCommentToEvent, toggleRSVPEvent, isEventLiked, hasRSVPed,
       addMarketplaceItem, deleteMarketplaceItem, toggleSaveItem, incrementItemViews, isItemSaved,

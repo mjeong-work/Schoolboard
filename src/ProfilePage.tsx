@@ -23,14 +23,17 @@ import {
 
 export default function ProfilePage() {
   const { user } = useAuth();
-  const { getUserPosts, getUserEvents, getUserMarketplaceItems, getUserStats } = useData();
+  const { getUserPosts, getUserEvents, getUserMarketplaceItems, getUserStats, isLoading } = useData();
   const [activeTab, setActiveTab] = useState('posts');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const userPosts = getUserPosts();
-  const userEvents = getUserEvents();
-  const userItems = getUserMarketplaceItems();
+  const query = searchQuery.trim().toLowerCase();
+  const matches = (title: string) => !query || title.toLowerCase().includes(query);
+
+  const userPosts = getUserPosts().filter(p => matches(p.title));
+  const userEvents = getUserEvents().filter(e => matches(e.title));
+  const userItems = getUserMarketplaceItems().filter(i => matches(i.title));
   const stats = getUserStats();
 
   const name = user?.name || 'User';
@@ -109,7 +112,7 @@ export default function ProfilePage() {
                     <h1 className="text-[#111] font-[Roboto] text-[20px] font-bold">{name}</h1>
                     {verified && <BadgeCheck className="w-6 h-6 text-[#6366f1]" />}
                   </div>
-                  <p className="text-[#666] mb-3 font-[Roboto] text-[14px]">
+                  <p className="text-[#666] mb-3 font-[Roboto] text-[14px] line-clamp-3">
                     {bio ? bio : <span className="italic text-[#bbb]">No bio yet — add one in Edit Profile</span>}
                   </p>
                 </div>
@@ -154,8 +157,8 @@ export default function ProfilePage() {
                   <div className="text-sm text-[#666] font-[Roboto]">Events</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-[#111] mb-1 font-[Roboto]">{stats.itemsSold}</div>
-                  <div className="text-sm text-[#666] font-[Roboto]">Items Sold</div>
+                  <div className="text-[#111] mb-1 font-[Roboto]">{stats.listings}</div>
+                  <div className="text-sm text-[#666] font-[Roboto]">Listings</div>
                 </div>
                 <div className="text-center">
                   <div className="text-[#111] mb-1 font-[Roboto]">{stats.savedItems}</div>
@@ -194,16 +197,24 @@ export default function ProfilePage() {
 
           {/* My Posts */}
           <TabsContent value="posts" className="space-y-3">
-            {userPosts.length === 0 ? (
+            {isLoading ? (
+              <div className="py-12 text-center text-[#999] font-[Roboto] text-sm">Loading…</div>
+            ) : userPosts.length === 0 ? (
               <Card className="p-8 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px] text-center">
                 <MessageSquare className="w-12 h-12 text-[#d1d5db] mx-auto mb-3" />
-                <p className="text-[#666] font-[Roboto]">You haven't created any posts yet.</p>
-                <Button
-                  onClick={() => window.location.hash = '#/community'}
-                  className="bg-[rgb(0,0,0)] hover:bg-[#1a1a1a] text-[rgb(255,254,254)] mt-4 px-4 py-2 rounded-lg font-[Roboto]"
-                >
-                  Create Your First Post
-                </Button>
+                {query ? (
+                  <p className="text-[#666] font-[Roboto]">No posts match "{searchQuery}".</p>
+                ) : (
+                  <>
+                    <p className="text-[#666] font-[Roboto]">You haven't created any posts yet.</p>
+                    <Button
+                      onClick={() => window.location.hash = '#/community'}
+                      className="bg-[rgb(0,0,0)] hover:bg-[#1a1a1a] text-[rgb(255,254,254)] mt-4 px-4 py-2 rounded-lg font-[Roboto]"
+                    >
+                      Create Your First Post
+                    </Button>
+                  </>
+                )}
               </Card>
             ) : (
               userPosts.map((post) => (
@@ -237,16 +248,24 @@ export default function ProfilePage() {
 
           {/* My Events */}
           <TabsContent value="events" className="space-y-3">
-            {userEvents.length === 0 ? (
+            {isLoading ? (
+              <div className="py-12 text-center text-[#999] font-[Roboto] text-sm">Loading…</div>
+            ) : userEvents.length === 0 ? (
               <Card className="p-8 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px] text-center">
                 <CalendarDays className="w-12 h-12 text-[#d1d5db] mx-auto mb-3" />
-                <p className="text-[#666] font-[Roboto]">You haven't RSVP'd to any events yet.</p>
-                <Button
-                  onClick={() => window.location.hash = '#/events'}
-                  className="bg-[rgb(0,0,0)] hover:bg-[#1a1a1a] text-white mt-4 px-4 py-2 rounded-lg font-[Roboto]"
-                >
-                  Browse Events
-                </Button>
+                {query ? (
+                  <p className="text-[#666] font-[Roboto]">No events match "{searchQuery}".</p>
+                ) : (
+                  <>
+                    <p className="text-[#666] font-[Roboto]">You haven't RSVP'd to any events yet.</p>
+                    <Button
+                      onClick={() => window.location.hash = '#/events'}
+                      className="bg-[rgb(0,0,0)] hover:bg-[#1a1a1a] text-white mt-4 px-4 py-2 rounded-lg font-[Roboto]"
+                    >
+                      Browse Events
+                    </Button>
+                  </>
+                )}
               </Card>
             ) : (
               userEvents.map((event) => (
@@ -278,16 +297,24 @@ export default function ProfilePage() {
 
           {/* My Items */}
           <TabsContent value="items" className="space-y-3">
-            {userItems.length === 0 ? (
+            {isLoading ? (
+              <div className="py-12 text-center text-[#999] font-[Roboto] text-sm">Loading…</div>
+            ) : userItems.length === 0 ? (
               <Card className="p-8 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px] text-center">
                 <ShoppingBag className="w-12 h-12 text-[#d1d5db] mx-auto mb-3" />
-                <p className="text-[#666] font-[Roboto]">You haven't listed any items for sale yet.</p>
-                <Button
-                  onClick={() => window.location.hash = '#/marketplace'}
-                  className="bg-[rgb(0,0,0)] hover:bg-[#1a1a1a] text-white mt-4 px-4 py-2 rounded-lg font-[Roboto]"
-                >
-                  Create Your First Listing
-                </Button>
+                {query ? (
+                  <p className="text-[#666] font-[Roboto]">No items match "{searchQuery}".</p>
+                ) : (
+                  <>
+                    <p className="text-[#666] font-[Roboto]">You haven't listed any items for sale yet.</p>
+                    <Button
+                      onClick={() => window.location.hash = '#/marketplace'}
+                      className="bg-[rgb(0,0,0)] hover:bg-[#1a1a1a] text-white mt-4 px-4 py-2 rounded-lg font-[Roboto]"
+                    >
+                      Create Your First Listing
+                    </Button>
+                  </>
+                )}
               </Card>
             ) : (
               userItems.map((item) => (
