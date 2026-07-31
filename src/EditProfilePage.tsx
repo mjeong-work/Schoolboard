@@ -182,7 +182,7 @@ export default function EditProfilePage() {
             <div className="flex flex-col sm:flex-row gap-6 mb-6">
               {/* Left: Avatar Upload */}
               <div className="flex flex-col items-center gap-3">
-                <Avatar className="w-20 h-20 border-2 border-white shadow-sm">
+                <Avatar className="w-20 h-20 border-2 border-[#f0f0f0] shadow-sm">
                   <AvatarImage src={avatarPreview} alt={formData.name} />
                   <AvatarFallback className="text-xl bg-[#6366f1] text-white font-[Roboto]">
                     {formData.name.split(' ').map(n => n[0]).join('') || '?'}

@@ -84,7 +84,15 @@ export default function ProfilePage() {
                   <X className="w-5 h-5 text-black" strokeWidth={1.5} />
                 </button>
               </>
-            ) : null}
+            ) : (
+              <button
+                onClick={() => setIsSearchOpen(true)}
+                className="ml-auto p-2 hover:bg-black/5 rounded-full transition-colors"
+                aria-label="Search your activity"
+              >
+                <Search className="w-5 h-5 text-[#666]" strokeWidth={1.5} />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -96,7 +104,7 @@ export default function ProfilePage() {
           <div className="flex flex-col sm:flex-row gap-6">
             {/* Avatar */}
             <div className="flex justify-center sm:justify-start text-[rgb(10,10,10)] font-[Roboto]">
-              <Avatar className="w-16 h-16 sm:w-24 sm:h-24 border-3 border-white shadow-lg">
+              <Avatar className="w-16 h-16 sm:w-24 sm:h-24 border-[3px] border-[#f0f0f0] shadow-lg">
                 <AvatarImage src={avatar} alt={name} />
                 <AvatarFallback className="text-xl bg-[#6366f1] text-white">
                   {name.split(' ').map(n => n[0]).join('')}
@@ -109,17 +117,17 @@ export default function ProfilePage() {
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
                 <div>
                   <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
-                    <h1 className="text-[#111] font-[Roboto] text-[20px] font-bold">{name}</h1>
+                    <h2 className="text-[#111] font-[Roboto] text-xl font-bold">{name}</h2>
                     {verified && <BadgeCheck className="w-6 h-6 text-[#6366f1]" />}
                   </div>
-                  <p className="text-[#666] mb-3 font-[Roboto] text-[14px] line-clamp-3">
+                  <p className="text-[#666] mb-3 font-[Roboto] text-sm line-clamp-3">
                     {bio ? bio : <span className="italic text-[#bbb]">No bio yet — add one in Edit Profile</span>}
                   </p>
                 </div>
 
                 <Button
                   onClick={() => window.location.hash = 'edit-profile'}
-                  className="bg-white border border-[#f0f0f0] text-[#111] hover:bg-[#fafafa] px-4 py-2 rounded-lg gap-2 self-center sm:self-start font-[Roboto] text-[13px]"
+                  className="bg-white border border-[#f0f0f0] text-[#111] hover:bg-[#fafafa] px-4 py-2 rounded-lg gap-2 self-center sm:self-start font-[Roboto] text-sm"
                 >
                   <Settings className="w-4 h-4" />
                   Edit Profile
@@ -131,17 +139,17 @@ export default function ProfilePage() {
                 {email && (
                   <div className="flex items-center justify-center sm:justify-start gap-2 text-[#666] font-[Roboto]">
                     <Mail className="w-4 h-4" />
-                    <span className="text-[13px]">{email}</span>
+                    <span className="text-sm">{email}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-center sm:justify-start gap-2 text-[#666] font-[Roboto]">
                   <BadgeCheck className="w-4 h-4" />
-                  <span className="text-[13px]">{majorLine}</span>
+                  <span className="text-sm">{majorLine}</span>
                 </div>
                 {joinDate && (
                   <div className="flex items-center justify-center sm:justify-start gap-2 text-[#666] font-[Roboto]">
                     <Calendar className="w-4 h-4" />
-                    <span className="text-[13px]">Joined {formatJoinDate(joinDate)}</span>
+                    <span className="text-sm">Joined {formatJoinDate(joinDate)}</span>
                   </div>
                 )}
               </div>
@@ -149,19 +157,19 @@ export default function ProfilePage() {
               {/* Stats */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-[#f0f0f0]">
                 <div className="text-center">
-                  <div className="text-[#111] mb-1 font-[Roboto]">{stats.posts}</div>
+                  <div className="text-xl font-bold text-[#111] mb-1 font-[Roboto]">{stats.posts}</div>
                   <div className="text-sm text-[#666] font-[Roboto]">Posts</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-[#111] mb-1 font-[Roboto]">{stats.eventsAttended}</div>
+                  <div className="text-xl font-bold text-[#111] mb-1 font-[Roboto]">{stats.eventsAttended}</div>
                   <div className="text-sm text-[#666] font-[Roboto]">Events</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-[#111] mb-1 font-[Roboto]">{stats.listings}</div>
+                  <div className="text-xl font-bold text-[#111] mb-1 font-[Roboto]">{stats.listings}</div>
                   <div className="text-sm text-[#666] font-[Roboto]">Listings</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-[#111] mb-1 font-[Roboto]">{stats.savedItems}</div>
+                  <div className="text-xl font-bold text-[#111] mb-1 font-[Roboto]">{stats.savedItems}</div>
                   <div className="text-sm text-[#666] font-[Roboto]">Saved</div>
                 </div>
               </div>
@@ -171,24 +179,24 @@ export default function ProfilePage() {
 
         {/* Activity Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full bg-transparent border-0 p-0 h-auto justify-start gap-8 mb-6 border-b border-[#f0f0f0]">
+          <TabsList className="w-full bg-transparent border-0 p-0 h-auto flex-nowrap justify-start overflow-x-auto gap-4 sm:gap-8 mb-6 border-b border-[#f0f0f0]">
             <TabsTrigger
               value="posts"
-              className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
+              className="shrink-0 whitespace-nowrap bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
             >
               <MessageSquare className="w-4 h-4" />
               My Posts
             </TabsTrigger>
             <TabsTrigger
               value="events"
-              className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
+              className="shrink-0 whitespace-nowrap bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
             >
               <CalendarDays className="w-4 h-4" />
               My Events
             </TabsTrigger>
             <TabsTrigger
               value="items"
-              className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
+              className="shrink-0 whitespace-nowrap bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
             >
               <ShoppingBag className="w-4 h-4" />
               My Items
@@ -200,7 +208,7 @@ export default function ProfilePage() {
             {isLoading ? (
               <div className="py-12 text-center text-[#999] font-[Roboto] text-sm">Loading…</div>
             ) : userPosts.length === 0 ? (
-              <Card className="p-8 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px] text-center">
+              <Card className="p-8 border border-[#f0f0f0] rounded-xl text-center">
                 <MessageSquare className="w-12 h-12 text-[#d1d5db] mx-auto mb-3" />
                 {query ? (
                   <p className="text-[#666] font-[Roboto]">No posts match "{searchQuery}".</p>
@@ -251,7 +259,7 @@ export default function ProfilePage() {
             {isLoading ? (
               <div className="py-12 text-center text-[#999] font-[Roboto] text-sm">Loading…</div>
             ) : userEvents.length === 0 ? (
-              <Card className="p-8 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px] text-center">
+              <Card className="p-8 border border-[#f0f0f0] rounded-xl text-center">
                 <CalendarDays className="w-12 h-12 text-[#d1d5db] mx-auto mb-3" />
                 {query ? (
                   <p className="text-[#666] font-[Roboto]">No events match "{searchQuery}".</p>
@@ -300,7 +308,7 @@ export default function ProfilePage() {
             {isLoading ? (
               <div className="py-12 text-center text-[#999] font-[Roboto] text-sm">Loading…</div>
             ) : userItems.length === 0 ? (
-              <Card className="p-8 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px] text-center">
+              <Card className="p-8 border border-[#f0f0f0] rounded-xl text-center">
                 <ShoppingBag className="w-12 h-12 text-[#d1d5db] mx-auto mb-3" />
                 {query ? (
                   <p className="text-[#666] font-[Roboto]">No items match "{searchQuery}".</p>
