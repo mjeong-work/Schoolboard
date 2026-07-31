@@ -135,20 +135,24 @@ export default function ProfilePage() {
               </div>
 
               {/* User Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 text-sm">
+              {/* w-fit + mx-auto centers this block as a whole on mobile (matching
+                  the centered avatar/name above), while the rows inside stay
+                  left-aligned to each other so the icons form a straight column
+                  instead of each drifting with its own text length. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 text-sm w-fit mx-auto sm:w-full sm:mx-0">
                 {email && (
-                  <div className="flex items-center justify-center sm:justify-start gap-2 text-[#666] font-[Roboto]">
-                    <Mail className="w-4 h-4" />
+                  <div className="flex items-center gap-2 text-[#666] font-[Roboto]">
+                    <Mail className="w-4 h-4 shrink-0" />
                     <span className="text-sm">{email}</span>
                   </div>
                 )}
-                <div className="flex items-center justify-center sm:justify-start gap-2 text-[#666] font-[Roboto]">
-                  <BadgeCheck className="w-4 h-4" />
+                <div className="flex items-center gap-2 text-[#666] font-[Roboto]">
+                  <BadgeCheck className="w-4 h-4 shrink-0" />
                   <span className="text-sm">{majorLine}</span>
                 </div>
                 {joinDate && (
-                  <div className="flex items-center justify-center sm:justify-start gap-2 text-[#666] font-[Roboto]">
-                    <Calendar className="w-4 h-4" />
+                  <div className="flex items-center gap-2 text-[#666] font-[Roboto]">
+                    <Calendar className="w-4 h-4 shrink-0" />
                     <span className="text-sm">Joined {formatJoinDate(joinDate)}</span>
                   </div>
                 )}
