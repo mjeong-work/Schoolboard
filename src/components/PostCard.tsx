@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { Heart, MessageCircle, Send, MoreHorizontal, BadgeCheck } from 'lucide-react';
 import { getAvatarColor } from '../utils/anonymousName';
-import { Button } from './ui/button';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { Collapsible, CollapsibleContent } from './ui/collapsible';
-import { Input } from './ui/input';
 import { useData, type Post } from '../utils/dataContext';
 import { useAuth } from '../utils/authContext';
 import { useChat } from '../utils/chatContext';
@@ -16,6 +13,7 @@ import {
 } from './ui/dropdown-menu';
 import { toast } from 'sonner@2.0.3';
 import { EditPostDialog } from './EditPostDialog';
+import { CommentsSheet } from './CommentsSheet';
 
 interface PostCardProps {
   post: Post;
@@ -34,7 +32,6 @@ export function PostCard({ post }: PostCardProps) {
   const { getOrCreateConversation } = useChat();
 
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
-  const [commentText, setCommentText] = useState('');
   const [isEditOpen, setIsEditOpen] = useState(false);
 
   const isLiked = isPostLiked(post.id);
@@ -45,11 +42,9 @@ export function PostCard({ post }: PostCardProps) {
     toggleLikePost(post.id);
   };
 
-  const handleAddComment = async () => {
-    if (!commentText.trim()) return;
+  const handleAddComment = async (text: string) => {
     try {
-      await addCommentToPost(post.id, commentText);
-      setCommentText('');
+      await addCommentToPost(post.id, text);
       toast.success('Comment added');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to add comment');
@@ -214,74 +209,20 @@ export function PostCard({ post }: PostCardProps) {
               </button>
             )}
           </div>
-
-          {/* Comments Section */}
-          <Collapsible open={isCommentsOpen} onOpenChange={setIsCommentsOpen}>
-            <CollapsibleContent className="mt-4 space-y-3">
-              {/* Add Comment Input */}
-              <div className="flex gap-2 pt-3 border-t border-[#f0f0f0]">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0 font-[Roboto]" style={{ background: getAvatarColor(user?.id || '') }}>
-                  {user?.name?.charAt(0) || 'A'}
-                </div>
-                <div className="flex-1 flex gap-2">
-                  <Input
-                    type="text"
-                    placeholder="Reply..."
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleAddComment();
-                      }
-                    }}
-                    className="flex-1 border-[#f0f0f0] rounded-full px-4 h-8 text-sm placeholder:text-[#999] focus-visible:ring-1 focus-visible:ring-black/20 focus-visible:border-black/20 font-[Roboto]"
-                  />
-                  <Button
-                    onClick={handleAddComment}
-                    size="icon"
-                    disabled={!commentText.trim()}
-                    className="bg-black hover:bg-black/80 text-white rounded-full h-8 w-8 disabled:opacity-30"
-                  >
-                    <Send className="w-3.5 h-3.5" strokeWidth={2} />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Comments List */}
-              {post.comments.length > 0 && (
-                <div className="space-y-3 pl-2">
-                  {post.comments.map((comment) => {
-                    const isOwnComment = user?.id === comment.authorId;
-                    return (
-                      <div key={comment.id} className="flex gap-2 mt-[0px] mr-[0px] mb-[12px] ml-[-8px]">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0 font-[Roboto] m-[0px] mx-[0px] my-[3px]" style={{ background: getAvatarColor(comment.authorId) }}>
-                          {comment.author.charAt(0)}
-                        </div>
-                        
-                        <div className="flex-1 min-w-0 px-[6px] py-[0px]">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-sm font-semibold text-[rgb(51,51,51)] font-[Roboto]">{comment.author}</span>
-                            <span className="text-xs text-[#999]">{formatDate(comment.date)}</span>
-                            {(isOwnComment || isAdmin) && (
-                              <button
-                                onClick={() => handleDeleteComment(comment.id)}
-                                className="text-xs text-[#999] hover:text-red-500 transition-colors ml-auto"
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                          <p className="text-sm text-[rgb(51,51,51)] leading-relaxed font-[Roboto]">{comment.text}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CollapsibleContent>
-          </Collapsible>
         </div>
       </div>
+
+      <CommentsSheet
+        open={isCommentsOpen}
+        onOpenChange={setIsCommentsOpen}
+        comments={post.comments}
+        currentUserId={user?.id}
+        currentUserName={user?.name}
+        isAdmin={isAdmin}
+        onAddComment={handleAddComment}
+        onDeleteComment={handleDeleteComment}
+      />
+
       {isEditOpen && (
         <EditPostDialog
           open={isEditOpen}

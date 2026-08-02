@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { Heart, MessageCircle, Calendar, Clock, MapPin, Users, CheckCircle, Send, MoreHorizontal, UserPlus } from 'lucide-react';
 import { getAvatarColor } from '../utils/anonymousName';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { Collapsible, CollapsibleContent } from './ui/collapsible';
 import { useData, type Event } from '../utils/dataContext';
 import { useAuth } from '../utils/authContext';
 import { useChat } from '../utils/chatContext';
@@ -17,6 +14,7 @@ import {
 } from './ui/dropdown-menu';
 import { EventLocationMap } from './EventLocationMap';
 import { EditEventDialog } from './EditEventDialog';
+import { CommentsSheet } from './CommentsSheet';
 
 interface EventCardProps {
   event: Event;
@@ -27,6 +25,7 @@ export function EventCard({ event }: EventCardProps) {
   const {
     toggleLikeEvent,
     addCommentToEvent,
+    deleteCommentFromEvent,
     toggleRSVPEvent,
     deleteEvent,
     updateEvent,
@@ -34,9 +33,8 @@ export function EventCard({ event }: EventCardProps) {
     hasRSVPed: hasUserRSVPed
   } = useData();
   const { getOrCreateConversation } = useChat();
-  
+
   const [showComments, setShowComments] = useState(false);
-  const [newComment, setNewComment] = useState('');
   const [isEditOpen, setIsEditOpen] = useState(false);
 
   const isLiked = isEventLiked(event.id);
@@ -66,18 +64,21 @@ export function EventCard({ event }: EventCardProps) {
     });
   };
 
-  const handleAddComment = () => {
-    if (!newComment.trim()) return;
-
-    addCommentToEvent(event.id, newComment);
-    setNewComment('');
-    toast.success('Comment added');
+  const handleAddComment = async (text: string) => {
+    try {
+      await addCommentToEvent(event.id, text);
+      toast.success('Comment added');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to add comment');
+    }
   };
 
-  const handleCommentKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleAddComment();
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      await deleteCommentFromEvent(event.id, commentId);
+      toast.success('Comment deleted');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete comment');
     }
   };
 
@@ -263,77 +264,19 @@ export function EventCard({ event }: EventCardProps) {
               <span className="text-sm text-[#999]">{event.comments.length}</span>
             </button>
           </div>
-
-          {/* Comments Section */}
-          <Collapsible open={showComments} onOpenChange={setShowComments}>
-            <CollapsibleContent className="mt-4 space-y-3">
-              {/* Add Comment Input */}
-              <div className="flex gap-2 pt-3 border-t border-[#f0f0f0]">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0" style={{ background: getAvatarColor(user?.id || '') }}>
-                  {user?.name?.charAt(0) || 'A'}
-                </div>
-                <div className="flex-1 flex gap-2">
-                  <Input
-                    type="text"
-                    placeholder="Reply..."
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleAddComment();
-                      }
-                    }}
-                    className="flex-1 border-[#f0f0f0] rounded-full px-4 h-8 text-sm placeholder:text-[#999] focus-visible:ring-1 focus-visible:ring-black/20 focus-visible:border-black/20"
-                  />
-                  <Button
-                    onClick={handleAddComment}
-                    size="icon"
-                    disabled={!newComment.trim()}
-                    className="bg-black hover:bg-black/80 text-white rounded-full h-8 w-8 disabled:opacity-30"
-                  >
-                    <Send className="w-3.5 h-3.5" strokeWidth={2} />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Comments List */}
-              {event.comments.length > 0 && (
-                <div className="space-y-3 pl-2">
-                  {event.comments.map((comment) => {
-                    const isOwnComment = user?.id === comment.authorId;
-                    return (
-                      <div key={comment.id} className="flex gap-2 mt-[0px] mr-[0px] mb-[12px] ml-[-8px]">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0 mx-[0px] my-[3px]" style={{ background: getAvatarColor(comment.authorId) }}>
-                          {comment.author.charAt(0)}
-                        </div>
-                        
-                        <div className="flex-1 min-w-0 mx-[6px] my-[0px]">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-sm font-semibold text-black">{comment.author}</span>
-                            <span className="text-xs text-[#999]">{formatDate(comment.date)}</span>
-                            {(isOwnComment || isAdmin) && (
-                              <button
-                                onClick={() => {
-                                  // Add delete comment functionality if needed
-                                  toast.success('Comment deleted');
-                                }}
-                                className="text-xs text-[#999] hover:text-red-500 transition-colors ml-auto"
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                          <p className="text-sm text-black leading-relaxed">{comment.text}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CollapsibleContent>
-          </Collapsible>
         </div>
       </div>
+
+      <CommentsSheet
+        open={showComments}
+        onOpenChange={setShowComments}
+        comments={event.comments}
+        currentUserId={user?.id}
+        currentUserName={user?.name}
+        isAdmin={isAdmin}
+        onAddComment={handleAddComment}
+        onDeleteComment={handleDeleteComment}
+      />
     </div>
 
     {/* Edit event dialog — only rendered when the author opens it */}

@@ -1,17 +1,15 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import * as DialogPrimitive from '@radix-ui/react-dialog@1.1.6';
+import { X, Clock, Image as ImageIcon, Calendar as CalendarIcon, MoreHorizontal, ChevronDown } from 'lucide-react';
+import { getAvatarColor } from '../utils/anonymousName';
+import { useAuth } from '../utils/authContext';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Upload, X, Image as ImageIcon } from 'lucide-react';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import { toast } from 'sonner@2.0.3';
 
 interface CreatePostDialogProps {
   open: boolean;
@@ -24,206 +22,194 @@ interface CreatePostDialogProps {
   }) => void;
 }
 
+// The "Anyone" pill in the header is a restyled version of the existing
+// post category — same field, same values sent to onSubmit, just presented
+// as an audience selector instead of a labeled dropdown field.
+const AUDIENCE_OPTIONS = [
+  { value: 'all-school', label: 'Anyone' },
+  { value: 'current-students', label: 'Current Students' },
+  { value: 'alumni', label: 'Alumni' },
+];
+
+const MAX_IMAGE_BYTES = 1 * 1024 * 1024; // 1 MB
+
 export function CreatePostDialog({ open, onOpenChange, onSubmit }: CreatePostDialogProps) {
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('current-students');
+  const { user } = useAuth();
+  const [audience, setAudience] = useState('all-school');
   const [content, setContent] = useState('');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!title.trim() || !content.trim()) {
-      return;
-    }
-
-    const newPost = {
-      title: title.trim(),
-      category,
-      content: content.trim(),
-      image: uploadedImage || undefined
-    };
-
-    onSubmit(newPost);
-    
-    // Reset form
-    setTitle('');
-    setCategory('current-students');
+  const resetForm = () => {
+    setAudience('all-school');
     setContent('');
     setUploadedImage(null);
-    onOpenChange(false);
   };
 
-  const MAX_IMAGE_BYTES = 1 * 1024 * 1024; // 1 MB
+  const closeAndReset = (next: boolean) => {
+    if (!next) resetForm();
+    onOpenChange(next);
+  };
+
+  const handleSubmit = () => {
+    if (!content.trim()) return;
+    // No dedicated title field anymore — the post IS the content, matching
+    // how the backend's required "title" column was always redundant with
+    // content for this style of post. PostCard only renders a separate
+    // title line when it differs from the content, so this stays invisible.
+    onSubmit({
+      title: content.trim(),
+      category: audience,
+      content: content.trim(),
+      image: uploadedImage || undefined,
+    });
+    closeAndReset(false);
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > MAX_IMAGE_BYTES) {
-      alert(`Image must be under 1 MB (selected file is ${(file.size / 1024 / 1024).toFixed(1)} MB).`);
+      toast.error(`Image must be under 1 MB (selected file is ${(file.size / 1024 / 1024).toFixed(1)} MB).`);
       e.target.value = '';
       return;
     }
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setUploadedImage(reader.result as string);
-    };
+    reader.onloadend = () => setUploadedImage(reader.result as string);
     reader.readAsDataURL(file);
   };
 
-  const handleRemoveImage = () => {
-    setUploadedImage(null);
-  };
-
-  const handleCancel = () => {
-    setTitle('');
-    setCategory('current-students');
-    setContent('');
-    setUploadedImage(null);
-    onOpenChange(false);
-  };
+  const audienceLabel = AUDIENCE_OPTIONS.find((o) => o.value === audience)?.label ?? 'Anyone';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="font-[Roboto]">
-          <DialogTitle className="text-[#111]">Create New Post</DialogTitle>
-          <DialogDescription className="text-[#666]">
-            Share your thoughts with the Campus Connect community
-          </DialogDescription>
-        </DialogHeader>
+    <DialogPrimitive.Root open={open} onOpenChange={closeAndReset}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            textareaRef.current?.focus();
+          }}
+          className="fixed inset-0 z-50 bg-white flex flex-col outline-none font-[Roboto] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+        >
+          <DialogPrimitive.Title className="sr-only">Create post</DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sr-only">Share a post with the Campus Connect community</DialogPrimitive.Description>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4 font-[Roboto]">
-          {/* Title */}
-          <div>
-            <Label htmlFor="post-title" className="text-[#666] mb-1.5 block">
-              Post Title *
-            </Label>
-            <Input
-              id="post-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter a descriptive title..."
-              className="border-[#e5e7eb] rounded-lg"
-              required
-            />
+          {/* Top bar */}
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#f0f0f0] shrink-0">
+            <DialogPrimitive.Close asChild>
+              <button className="p-2 hover:bg-black/5 rounded-full transition-colors" aria-label="Close">
+                <X className="w-5 h-5 text-[#111]" />
+              </button>
+            </DialogPrimitive.Close>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors">
+                  <div
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium shrink-0"
+                    style={{ background: getAvatarColor(user?.id || '') }}
+                  >
+                    {user?.name?.charAt(0) || 'A'}
+                  </div>
+                  <span className="text-sm font-semibold text-[#111]">{audienceLabel}</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-[#666]" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center">
+                {AUDIENCE_OPTIONS.map((opt) => (
+                  <DropdownMenuItem key={opt.value} onClick={() => setAudience(opt.value)}>
+                    {opt.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => toast("Scheduling posts isn't available yet.")}
+                className="p-2 hover:bg-black/5 rounded-full transition-colors"
+                aria-label="Schedule post"
+              >
+                <Clock className="w-5 h-5 text-[#666]" />
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={!content.trim()}
+                className="bg-black text-white rounded-full px-4 h-8 text-sm font-semibold disabled:bg-[#e5e7eb] disabled:text-[#999] transition-colors"
+              >
+                Post
+              </button>
+            </div>
           </div>
 
-          {/* Category */}
-          <div>
-            <Label htmlFor="post-category" className="text-[#666] mb-1.5 block">
-              Category *
-            </Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="border-[#e5e7eb] rounded-lg">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="current-students">Current Students</SelectItem>
-                <SelectItem value="alumni">Alumni</SelectItem>
-                <SelectItem value="all-school">All School</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Date (Auto-filled, read-only) */}
-          <div>
-            <Label htmlFor="post-date" className="text-[#666] mb-1.5 block">
-              Date
-            </Label>
-            <Input
-              id="post-date"
-              value={new Date().toLocaleDateString('en-US', { 
-                month: 'long', 
-                day: 'numeric', 
-                year: 'numeric' 
-              })}
-              disabled
-              className="border-[#e5e7eb] rounded-lg bg-[#f9fafb] text-[#666]"
-            />
-          </div>
-
-          {/* Content */}
-          <div>
-            <Label htmlFor="post-content" className="text-[#666] mb-1.5 block">
-              Post Content *
-            </Label>
-            <Textarea
-              id="post-content"
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto px-4 py-3">
+            <textarea
+              ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="What's on your mind? Share with the community..."
-              className="border-[#e5e7eb] rounded-lg min-h-[120px]"
-              required
+              placeholder="Share your thoughts..."
+              className="w-full min-h-[140px] resize-none outline-none border-none text-xl text-[#111] placeholder:text-[#999] bg-transparent"
             />
-          </div>
 
-          {/* Image Upload */}
-          <div>
-            <Label className="text-[#666] mb-1.5 block">
-              Photo (Optional)
-            </Label>
-            
-            {!uploadedImage ? (
-              <div className="border-2 border-dashed border-[#e5e7eb] rounded-lg p-5 text-center hover:border-[#0b5fff] transition-colors cursor-pointer">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                  id="image-upload"
-                />
-                <label htmlFor="image-upload" className="cursor-pointer">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-10 h-10 rounded-full bg-[rgba(67,68,68,0.1)] flex items-center justify-center">
-                      <Upload className="w-5 h-5 text-[#0b5fff]" />
-                    </div>
-                    <div className="text-sm text-[#666]">
-                      Click to upload an image
-                    </div>
-                    <div className="text-xs text-[#999]">
-                      PNG, JPG, GIF up to 1MB
-                    </div>
-                  </div>
-                </label>
-              </div>
-            ) : (
-              <div className="relative border border-[#e5e7eb] rounded-lg overflow-hidden">
-                <img 
-                  src={uploadedImage} 
-                  alt="Upload preview" 
-                  className="w-full h-auto max-h-[250px] object-cover"
+            {uploadedImage && (
+              <div className="relative rounded-2xl overflow-hidden border border-[#f0f0f0] mt-2">
+                <img
+                  src={uploadedImage}
+                  alt="Upload preview"
+                  className="w-full h-auto max-h-[400px] object-cover"
                 />
                 <button
                   type="button"
-                  onClick={handleRemoveImage}
-                  className="absolute top-2 right-2 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#f9fafb] transition-colors"
+                  onClick={() => setUploadedImage(null)}
+                  className="absolute top-2 right-2 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center transition-colors"
                 >
-                  <X className="w-4 h-4 text-[#666]" />
+                  <X className="w-4 h-4 text-white" />
                 </button>
               </div>
             )}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-col-reverse sm:flex-row gap-2.5 pt-3">
-            <Button
+          {/* Bottom toolbar */}
+          <div className="border-t border-[#f0f0f0] px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center gap-1 shrink-0">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageUpload}
+            />
+            <button
               type="button"
-              onClick={handleCancel}
-              className="bg-white border border-[#e5e7eb] text-[#111] hover:bg-[#f9fafb] px-6 py-2 rounded-lg w-full sm:w-auto"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 hover:bg-black/5 rounded-full transition-colors"
+              aria-label="Add photo"
             >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={!title.trim() || !content.trim()}
-              className="bg-[rgb(0,0,0)] hover:bg-[#0949cc] text-white px-6 py-2 rounded-lg shadow-sm w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+              <ImageIcon className="w-5 h-5 text-[#0b5fff]" />
+            </button>
+            <button
+              type="button"
+              onClick={() => toast("Scheduling posts isn't available yet.")}
+              className="p-2 hover:bg-black/5 rounded-full transition-colors"
+              aria-label="Schedule"
             >
-              Post to Community
-            </Button>
+              <CalendarIcon className="w-5 h-5 text-[#0b5fff]" />
+            </button>
+            <button
+              type="button"
+              onClick={() => toast('No additional options yet.')}
+              className="p-2 hover:bg-black/5 rounded-full transition-colors"
+              aria-label="More options"
+            >
+              <MoreHorizontal className="w-5 h-5 text-[#0b5fff]" />
+            </button>
           </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

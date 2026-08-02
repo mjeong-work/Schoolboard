@@ -84,6 +84,7 @@ interface DataContextType {
   deleteEvent: (eventId: string) => Promise<void>;
   toggleLikeEvent: (eventId: string) => Promise<void>;
   addCommentToEvent: (eventId: string, text: string) => Promise<void>;
+  deleteCommentFromEvent: (eventId: string, commentId: string) => Promise<void>;
   toggleRSVPEvent: (eventId: string) => Promise<void>;
   isEventLiked: (eventId: string) => boolean;
   hasRSVPed: (eventId: string) => boolean;
@@ -439,6 +440,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await fetchEvents();
   };
 
+  const deleteCommentFromEvent = async (eventId: string, commentId: string) => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from('event_comments')
+      .delete()
+      .eq('id', commentId)
+      .select('id');
+    if (error) {
+      console.error('[deleteCommentFromEvent] Supabase error:', error);
+      throw new Error(error.message);
+    }
+    if (!data || data.length === 0) {
+      console.warn('[deleteCommentFromEvent] No rows deleted — RLS may be blocking for commentId:', commentId);
+      throw new Error('Delete was rejected — you may not have permission to delete this comment.');
+    }
+    await fetchEvents();
+  };
+
   const toggleRSVPEvent = async (eventId: string) => {
     if (!user) return;
     const rsvped = hasRSVPed(eventId);
@@ -535,7 +554,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <DataContext.Provider value={{
       posts, events, marketplaceItems, isLoading,
       addPost, updatePost, deletePost, toggleLikePost, addCommentToPost, deleteCommentFromPost, isPostLiked,
-      addEvent, updateEvent, deleteEvent, toggleLikeEvent, addCommentToEvent, toggleRSVPEvent, isEventLiked, hasRSVPed,
+      addEvent, updateEvent, deleteEvent, toggleLikeEvent, addCommentToEvent, deleteCommentFromEvent, toggleRSVPEvent, isEventLiked, hasRSVPed,
       addMarketplaceItem, deleteMarketplaceItem, toggleSaveItem, incrementItemViews, isItemSaved,
       getUserPosts, getUserEvents, getUserMarketplaceItems, getUserSavedItems, getUserStats,
     }}>
