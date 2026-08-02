@@ -1,14 +1,7 @@
-import { useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
+import { useRef, useState } from 'react';
+import * as DialogPrimitive from '@radix-ui/react-dialog@1.1.6';
 import { Label } from './ui/label';
+import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import {
   Select,
@@ -17,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
-import { Upload, X } from 'lucide-react';
+import { Camera, X } from 'lucide-react';
 
 interface CreateMarketplaceDialogProps {
   open: boolean;
@@ -32,6 +25,14 @@ interface CreateMarketplaceDialogProps {
   }) => void;
 }
 
+const CATEGORY_OPTIONS = [
+  'Textbooks', 'Electronics', 'Furniture', 'Appliances', 'Sports & Outdoors',
+  'School Supplies', 'Musical Instruments', 'Clothing', 'Other',
+];
+
+const CONDITION_OPTIONS = ['New', 'Like New', 'Good', 'Fair', 'Poor'];
+const DESCRIPTION_MAX_LENGTH = 1000;
+
 export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: CreateMarketplaceDialogProps) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
@@ -39,230 +40,208 @@ export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: Create
   const [condition, setCondition] = useState('');
   const [description, setDescription] = useState('');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!title.trim() || !category || !price || !condition || !description.trim()) {
-      return;
-    }
+  const resetForm = () => {
+    setTitle('');
+    setCategory('');
+    setPrice('');
+    setCondition('');
+    setDescription('');
+    setUploadedImage(null);
+  };
 
-    const newListing = {
+  const closeAndReset = (next: boolean) => {
+    if (!next) resetForm();
+    onOpenChange(next);
+  };
+
+  const isSubmitDisabled = !title.trim() || !category || !price || !condition || !description.trim();
+
+  const handleSubmit = () => {
+    if (isSubmitDisabled) return;
+
+    onSubmit({
       title: title.trim(),
       category,
       price: parseFloat(price),
       condition,
       description: description.trim(),
-      image: uploadedImage || undefined
-    };
+      image: uploadedImage || undefined,
+    });
 
-    onSubmit(newListing);
-    
-    // Reset form
-    setTitle('');
-    setCategory('');
-    setPrice('');
-    setCondition('');
-    setDescription('');
-
-    setUploadedImage(null);
-    onOpenChange(false);
+    closeAndReset(false);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setUploadedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setUploadedImage(reader.result as string);
+    reader.readAsDataURL(file);
   };
 
-  const handleRemoveImage = () => {
-    setUploadedImage(null);
-  };
-
-  const handleCancel = () => {
-    setTitle('');
-    setCategory('');
-    setPrice('');
-    setCondition('');
-    setDescription('');
-
-    setUploadedImage(null);
-    onOpenChange(false);
-  };
+  const fieldClass = 'border-[#e5e7eb] bg-white rounded-md';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-[#111]">Create Marketplace Listing</DialogTitle>
-          <DialogDescription className="text-[#666]">
-            List an item for sale to the Campus Connect community
-          </DialogDescription>
-        </DialogHeader>
+    <DialogPrimitive.Root open={open} onOpenChange={closeAndReset}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content className="fixed inset-0 z-50 bg-white flex flex-col outline-none font-[Roboto] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0">
+          <DialogPrimitive.Title className="sr-only">Create Listing</DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sr-only">List an item for sale to the Campus Connect community</DialogPrimitive.Description>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-          {/* Title */}
-          <div>
-            <Label htmlFor="listing-title" className="text-[#666] mb-1.5 block">
-              Item Title *
-            </Label>
-            <Input
-              id="listing-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., MacBook Pro 13 inch 2020"
-              className="border-[#e5e7eb] rounded-lg"
-              required
-            />
+          {/* Top bar */}
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#f0f0f0] shrink-0">
+            <DialogPrimitive.Close asChild>
+              <button className="p-2 hover:bg-black/5 rounded-full transition-colors" aria-label="Close">
+                <X className="w-5 h-5 text-[#111]" />
+              </button>
+            </DialogPrimitive.Close>
+            <span className="font-semibold text-[#111]">Create Listing</span>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitDisabled}
+              className="bg-black text-white rounded-full px-4 h-8 text-sm font-semibold disabled:bg-[#e5e7eb] disabled:text-[#999] transition-colors"
+            >
+              Post
+            </button>
           </div>
 
-          {/* Category and Price */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="listing-category" className="text-[#666] mb-1.5 block">
-                Category *
-              </Label>
-              <Select value={category} onValueChange={setCategory} required>
-                <SelectTrigger className="border-[#e5e7eb] rounded-lg">
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Textbooks">Textbooks</SelectItem>
-                  <SelectItem value="Electronics">Electronics</SelectItem>
-                  <SelectItem value="Furniture">Furniture</SelectItem>
-                  <SelectItem value="Appliances">Appliances</SelectItem>
-                  <SelectItem value="Sports & Outdoors">Sports & Outdoors</SelectItem>
-                  <SelectItem value="School Supplies">School Supplies</SelectItem>
-                  <SelectItem value="Musical Instruments">Musical Instruments</SelectItem>
-                  <SelectItem value="Clothing">Clothing</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="listing-price" className="text-[#666] mb-1.5 block">
-                Price ($) *
-              </Label>
-              <Input
-                id="listing-price"
-                type="number"
-                min="0"
-                step="0.01"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="0.00"
-                className="border-[#e5e7eb] rounded-lg"
-                required
-              />
-            </div>
-          </div>
-
-          {/* Condition */}
-          <div>
-            <Label htmlFor="listing-condition" className="text-[#666] mb-1.5 block">
-              Condition *
-            </Label>
-            <Select value={condition} onValueChange={setCondition} required>
-              <SelectTrigger className="border-[#e5e7eb] rounded-lg">
-                <SelectValue placeholder="Select condition" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="New">New</SelectItem>
-                <SelectItem value="Like New">Like New</SelectItem>
-                <SelectItem value="Good">Good</SelectItem>
-                <SelectItem value="Fair">Fair</SelectItem>
-                <SelectItem value="Poor">Poor</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Description */}
-          <div>
-            <Label htmlFor="listing-description" className="text-[#666] mb-1.5 block">
-              Description *
-            </Label>
-            <Textarea
-              id="listing-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe your item in detail..."
-              className="border-[#e5e7eb] rounded-lg min-h-[120px]"
-              required
-            />
-          </div>
-
-          {/* Image Upload */}
-          <div>
-            <Label className="text-[#666] mb-1.5 block">
-              Item Photo (Optional)
-            </Label>
-            
-            {!uploadedImage ? (
-              <div className="border-2 border-dashed border-[#e5e7eb] rounded-lg p-5 text-center hover:border-[#0b5fff] transition-colors cursor-pointer">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                  id="listing-image-upload"
-                />
-                <label htmlFor="listing-image-upload" className="cursor-pointer">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-10 h-10 rounded-full bg-[#eff6ff] flex items-center justify-center">
-                      <Upload className="w-5 h-5 text-[#0b5fff]" />
-                    </div>
-                    <div className="text-sm text-[#666]">
-                      Click to upload an image
-                    </div>
-                    <div className="text-xs text-[#999]">
-                      PNG, JPG, GIF up to 10MB
-                    </div>
-                  </div>
-                </label>
-              </div>
-            ) : (
-              <div className="relative border border-[#e5e7eb] rounded-lg overflow-hidden">
-                <img 
-                  src={uploadedImage} 
-                  alt="Upload preview" 
-                  className="w-full h-auto max-h-[250px] object-cover"
-                />
+          {/* Scrollable form */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Photo upload */}
+            {uploadedImage ? (
+              <div className="relative w-full h-48 sm:h-56 shrink-0 overflow-hidden bg-[#f5f5f5]">
+                <img src={uploadedImage} alt="Item preview" className="w-full h-full object-cover" />
                 <button
                   type="button"
-                  onClick={handleRemoveImage}
-                  className="absolute top-2 right-2 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#f9fafb] transition-colors"
+                  onClick={() => setUploadedImage(null)}
+                  className="absolute top-2 right-2 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center transition-colors"
+                  aria-label="Remove photo"
                 >
-                  <X className="w-4 h-4 text-[#666]" />
+                  <X className="w-4 h-4 text-white" />
                 </button>
               </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full h-40 sm:h-48 shrink-0 flex flex-col items-center justify-center gap-2 bg-white border-b border-[#f0f0f0] hover:bg-[#fafafa] transition-colors"
+              >
+                <div className="w-10 h-10 rounded-full border border-[#e5e7eb] flex items-center justify-center">
+                  <Camera className="w-5 h-5 text-[#666]" />
+                </div>
+                <span className="text-sm text-[#666]">Add a photo</span>
+              </button>
             )}
-          </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageUpload}
+            />
 
-          {/* Action Buttons */}
-          <div className="flex flex-col-reverse sm:flex-row gap-2.5 pt-3">
-            <Button
-              type="button"
-              onClick={handleCancel}
-              className="bg-white border border-[#e5e7eb] text-[#111] hover:bg-[#f9fafb] px-6 py-2 rounded-lg w-full sm:w-auto"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={!title.trim() || !category || !price || !condition || !description.trim()}
-              className="bg-[#0b5fff] hover:bg-[#0949cc] text-white px-6 py-2 rounded-lg shadow-sm w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Create Listing
-            </Button>
+            <div className="p-4 space-y-5">
+              {/* Item Title */}
+              <div>
+                <Label htmlFor="listing-title" className="text-[#666] mb-1.5 block">
+                  Item Title *
+                </Label>
+                <Input
+                  id="listing-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g., MacBook Pro 13 inch 2020"
+                  className={fieldClass}
+                  required
+                />
+              </div>
+
+              {/* Category */}
+              <div>
+                <Label htmlFor="listing-category" className="text-[#666] mb-1.5 block">
+                  Category *
+                </Label>
+                <Select value={category} onValueChange={setCategory} required>
+                  <SelectTrigger id="listing-category" className={fieldClass}>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORY_OPTIONS.map((opt) => (
+                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Price */}
+              <div>
+                <Label htmlFor="listing-price" className="text-[#666] mb-1.5 block">
+                  Price *
+                </Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#666] text-sm pointer-events-none">$</span>
+                  <Input
+                    id="listing-price"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="0.00"
+                    className={`${fieldClass} pl-6`}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Condition */}
+              <div>
+                <Label className="text-[#666] mb-1.5 block">Condition *</Label>
+                <div className="flex flex-wrap gap-2">
+                  {CONDITION_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setCondition(opt)}
+                      className={`px-3.5 h-8 rounded-full text-sm font-medium border transition-colors ${
+                        condition === opt
+                          ? 'bg-black text-white border-black'
+                          : 'bg-white text-[#111] border-[#e5e7eb] hover:bg-[#f9fafb]'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <Label htmlFor="listing-description" className="text-[#666] mb-1.5 block">
+                  Description *
+                </Label>
+                <Textarea
+                  id="listing-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value.slice(0, DESCRIPTION_MAX_LENGTH))}
+                  maxLength={DESCRIPTION_MAX_LENGTH}
+                  placeholder="Describe your item..."
+                  className={`${fieldClass} min-h-[120px]`}
+                  required
+                />
+                <div className="text-xs text-[#999] text-right mt-1">
+                  {description.length}/{DESCRIPTION_MAX_LENGTH}
+                </div>
+              </div>
+            </div>
           </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
