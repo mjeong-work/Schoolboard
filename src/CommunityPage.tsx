@@ -218,20 +218,23 @@ export default function CommunityPage() {
                 </button>
               </>
             ) : (
-              <>
+              <div className="ml-auto flex items-center gap-2">
+                {/* Hidden on mobile — the floating "+" button already covers
+                    post creation there, so this avoided showing two create
+                    controls on the same screen. */}
                 <Button
                   onClick={() => setIsCreatePostOpen(true)}
-                  className="ml-auto bg-black hover:bg-black/80 text-white px-4 h-8 rounded-full text-sm font-[Roboto]"
+                  className="hidden sm:inline-flex bg-black hover:bg-black/80 text-white px-4 h-8 rounded-full text-sm font-[Roboto]"
                 >
                   Post
                 </Button>
-                <button 
+                <button
                   onClick={() => setIsSearchOpen(true)}
                   className="p-2 hover:bg-black/5 rounded-full transition-colors"
                 >
                   <Search className="w-5 h-5 text-black" strokeWidth={1.5} />
                 </button>
-              </>
+              </div>
             )}
           </div>
 

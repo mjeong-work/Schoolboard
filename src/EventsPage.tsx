@@ -246,9 +246,12 @@ export default function EventsPage() {
                 >
                   <Search className="w-5 h-5 text-black" strokeWidth={1.5} />
                 </button>
+                {/* Hidden on mobile — the floating "+" button already covers
+                    event creation there, so this avoided showing two create
+                    controls on the same screen. */}
                 <Button
                   onClick={() => setIsCreateEventOpen(true)}
-                  className="bg-black text-white hover:bg-black/90 rounded-full px-4 py-1.5 h-auto text-sm font-[Roboto]"
+                  className="hidden sm:inline-flex bg-black text-white hover:bg-black/90 rounded-full px-4 py-1.5 h-auto text-sm font-[Roboto]"
                 >
                   Post
                 </Button>
