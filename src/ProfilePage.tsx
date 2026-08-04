@@ -100,7 +100,16 @@ export default function ProfilePage() {
       {/* Main Content */}
       <main className="max-w-[640px] mx-auto px-4 sm:px-6 py-5 sm:py-6">
         {/* Profile Header Card */}
-        <Card className="p-4 sm:p-5 rounded-[0px] mb-5 border-0">
+        <Card className="relative p-4 sm:p-5 rounded-[0px] mb-5 border-0">
+          <button
+            onClick={() => window.location.hash = 'edit-profile'}
+            aria-label="Edit profile"
+            title="Edit profile"
+            className="absolute top-3 right-3 sm:top-4 sm:right-4 p-2 rounded-full text-[#666] hover:bg-black/5 hover:text-[#111] transition-colors"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+
           <div className="flex flex-col sm:flex-row gap-6">
             {/* Avatar */}
             <div className="flex justify-center sm:justify-start text-[rgb(10,10,10)] font-[Roboto]">
@@ -114,24 +123,14 @@ export default function ProfilePage() {
 
             {/* Profile Info */}
             <div className="flex-1 text-center sm:text-left">
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
-                <div>
-                  <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
-                    <h2 className="text-[#111] font-[Roboto] text-xl font-bold">{name}</h2>
-                    {verified && <BadgeCheck className="w-6 h-6 text-[#6366f1]" />}
-                  </div>
-                  <p className="text-[#666] mb-3 font-[Roboto] text-sm line-clamp-3">
-                    {bio ? bio : <span className="italic text-[#bbb]">No bio yet — add one in Edit Profile</span>}
-                  </p>
+              <div className="mb-4 pr-8 sm:pr-10">
+                <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
+                  <h2 className="text-[#111] font-[Roboto] text-xl font-bold">{name}</h2>
+                  {verified && <BadgeCheck className="w-6 h-6 text-[#6366f1]" />}
                 </div>
-
-                <Button
-                  onClick={() => window.location.hash = 'edit-profile'}
-                  className="bg-white border border-[#f0f0f0] text-[#111] hover:bg-[#fafafa] px-4 py-2 rounded-lg gap-2 self-center sm:self-start font-[Roboto] text-sm"
-                >
-                  <Settings className="w-4 h-4" />
-                  Edit Profile
-                </Button>
+                <p className="text-[#666] mb-3 font-[Roboto] text-sm line-clamp-3">
+                  {bio ? bio : <span className="italic text-[#bbb]">No bio yet — add one in Edit Profile</span>}
+                </p>
               </div>
 
               {/* User Details */}
