@@ -223,16 +223,12 @@ export const MessagesPage: React.FC = () => {
     <div className="min-h-screen bg-white">
       <NavigationBar activeTab="messages" />
 
-      {/* Header - Threads Style */}
-      <div className="sticky top-0 bg-white/95 backdrop-blur-sm z-10">
+      {/* Header - page title now lives in NavigationBar (see PAGE_TITLES),
+          so this bar only carries the tabs. */}
+      <div className="sticky top-14 bg-white/95 backdrop-blur-sm z-10">
         <div className="max-w-[640px] mx-auto px-4 border-b border-[#f0f0f0]">
-          {/* Title */}
-          <div className="flex items-center justify-between py-3">
-            <h1 className="text-2xl font-[Bayon]">Messages</h1>
-          </div>
-
           {/* Tabs - Underline style like Community/Events/Marketplace */}
-          <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
+          <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full pt-3">
             <TabsList className="w-full bg-transparent border-0 p-0 h-auto justify-start gap-8">
               <TabsTrigger 
                 value="all" 

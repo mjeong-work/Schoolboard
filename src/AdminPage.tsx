@@ -132,7 +132,10 @@ export default function AdminPage() {
 
       <main className="max-w-[960px] mx-auto px-4 sm:px-6 py-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold font-[Bayon] mb-1">Admin Panel</h1>
+          {/* Hidden on mobile — NavigationBar already shows "Admin" as the page
+              title there. Desktop's nav doesn't show a title, so it keeps this
+              heading. */}
+          <h1 className="hidden md:block text-2xl font-bold font-[Bayon] mb-1">Admin Panel</h1>
           <p className="text-[#666] text-sm font-[Roboto]">Manage users and platform content</p>
         </div>
 
