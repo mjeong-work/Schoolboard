@@ -59,11 +59,11 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-white">
       <NavigationBar activeTab="profile" />
 
-      {/* Threads-style Header */}
-      <div className="sticky top-0 bg-white/95 backdrop-blur-sm z-10">
+      {/* Utility bar — page title now lives in NavigationBar; this row is
+          just the search toggle so it doesn't duplicate that title. */}
+      <div className="sticky top-14 bg-white/95 backdrop-blur-sm z-10">
         <div className="max-w-[640px] mx-auto px-4 border-b border-[#f0f0f0]">
           <div className="flex items-center py-3 gap-3">
-            <h1 className="text-2xl font-bold font-[Bayon]">Profile</h1>
             {isSearchOpen ? (
               <>
                 <div className="w-1/2 flex items-center gap-2 bg-[#f5f5f5] rounded-full px-[16px] py-[8px] ml-auto">
@@ -135,27 +135,31 @@ export default function ProfilePage() {
               </div>
 
               {/* User Details */}
-              {/* w-fit + mx-auto centers this block as a whole on mobile (matching
-                  the centered avatar/name above), while the rows inside stay
-                  left-aligned to each other so the icons form a straight column
-                  instead of each drifting with its own text length. */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 text-sm w-fit mx-auto sm:w-full sm:mx-0">
+              {/* Email is the primary contact info, so it gets its own line in
+                  darker, heavier text. Major/graduation-year and join date are
+                  secondary metadata — grouping them as pill chips (rather than
+                  full-width icon+text rows) means they read as a set and wrap
+                  safely on narrow screens instead of leaving icons stranded at
+                  different horizontal positions per row. */}
+              <div className="mb-4 flex flex-col items-center sm:items-start gap-2">
                 {email && (
-                  <div className="flex items-center gap-2 text-[#666] font-[Roboto]">
-                    <Mail className="w-4 h-4 shrink-0" />
-                    <span className="text-sm">{email}</span>
+                  <div className="flex items-center gap-2 text-[#111] font-[Roboto]">
+                    <Mail className="w-4 h-4 shrink-0 text-[#6366f1]" />
+                    <span className="text-sm font-medium">{email}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2 text-[#666] font-[Roboto]">
-                  <BadgeCheck className="w-4 h-4 shrink-0" />
-                  <span className="text-sm">{majorLine}</span>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                  <span className="inline-flex items-center gap-1.5 bg-[#eef2ff] text-[#6366f1] rounded-full px-3 py-1 text-xs font-medium font-[Roboto]">
+                    <BadgeCheck className="w-3.5 h-3.5" />
+                    {majorLine}
+                  </span>
+                  {joinDate && (
+                    <span className="inline-flex items-center gap-1.5 bg-[#f5f5f5] text-[#666] rounded-full px-3 py-1 text-xs font-medium font-[Roboto]">
+                      <Calendar className="w-3.5 h-3.5" />
+                      Joined {formatJoinDate(joinDate)}
+                    </span>
+                  )}
                 </div>
-                {joinDate && (
-                  <div className="flex items-center gap-2 text-[#666] font-[Roboto]">
-                    <Calendar className="w-4 h-4 shrink-0" />
-                    <span className="text-sm">Joined {formatJoinDate(joinDate)}</span>
-                  </div>
-                )}
               </div>
 
               {/* Stats */}

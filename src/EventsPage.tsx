@@ -190,12 +190,12 @@ export default function EventsPage() {
     <div className="min-h-screen bg-white">
       <NavigationBar activeTab="events" />
       
-      {/* Threads-style Header */}
-      <div className="sticky top-0 bg-white/95 backdrop-blur-sm z-10">
+      {/* Utility bar — page title now lives in NavigationBar; this row is
+          just filter/search controls so it doesn't duplicate that title. */}
+      <div className="sticky top-14 bg-white/95 backdrop-blur-sm z-10">
         <div className="max-w-[640px] mx-auto px-4 border-b border-[#f0f0f0]">
           {/* Top Bar */}
           <div className="flex items-center py-3 gap-3">
-            <h1 className="text-2xl font-bold font-[Bayon]">Events</h1>
             {isSearchOpen ? (
               <>
                 <div className="flex items-center gap-2 ml-auto">

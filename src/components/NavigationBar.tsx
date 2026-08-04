@@ -8,6 +8,15 @@ interface NavigationBarProps {
   activeTab?: 'community' | 'events' | 'marketplace' | 'admin' | 'profile' | 'messages';
 }
 
+const PAGE_TITLES: Record<string, string> = {
+  community: 'Community',
+  events: 'Events',
+  marketplace: 'Marketplace',
+  profile: 'Profile',
+  messages: 'Messages',
+  admin: 'Admin',
+};
+
 export function NavigationBar({ activeTab = 'community' }: NavigationBarProps) {
   const { logout, user } = useAuth();
   const { getTotalUnreadCount } = useChat();
@@ -31,9 +40,23 @@ export function NavigationBar({ activeTab = 'community' }: NavigationBarProps) {
     <nav className="border-b border-[#e5e7eb] bg-white sticky top-0 z-50">
       <div className="max-w-[960px] mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-14">
-          {/* Logo */}
+          {/* Logo — on mobile, the nav links below are tucked behind the hamburger
+              menu and the active-tab highlight isn't visible, so this doubles as
+              the page's only title: brand shrinks to a small eyebrow label and
+              the current page name becomes the prominent text. On desktop the
+              nav links already show the active page, so the brand stays as-is. */}
           <div className="flex items-center gap-6">
-            <h2 className="text-[#111] font-bold font-[Bayon] text-[24px]">Campus Connect</h2>
+            <div className="flex flex-col justify-center leading-none md:flex-row md:items-center md:gap-6">
+              <span className="hidden md:inline text-[#111] font-bold font-[Bayon] text-[24px]">
+                Campus Connect
+              </span>
+              <span className="md:hidden text-[10px] font-semibold tracking-wide text-[#999] uppercase">
+                Campus Connect
+              </span>
+              <h1 className="md:hidden text-[19px] font-bold font-[Roboto] text-[#111] mt-0.5">
+                {PAGE_TITLES[activeTab] ?? 'Campus Connect'}
+              </h1>
+            </div>
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-1 font-[Roboto]">
