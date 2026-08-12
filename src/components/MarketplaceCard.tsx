@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Heart, Eye, BadgeCheck, MessageCircle, Trash2, MoreHorizontal, MapPin, Navigation, ChevronDown } from 'lucide-react';
+import { useState } from 'react';
+import { Heart, Eye, BadgeCheck, MessageCircle, MessageSquare, Trash2, MoreHorizontal, MapPin, Navigation, ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useData, type MarketplaceItem } from '../utils/dataContext';
@@ -12,6 +12,8 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { toast } from 'sonner@2.0.3';
+import { CommentsSheet } from './CommentsSheet';
+import { MarketplaceDetailSheet } from './MarketplaceDetailSheet';
 
 interface MarketplaceCardProps {
   item: MarketplaceItem;
@@ -19,10 +21,18 @@ interface MarketplaceCardProps {
 
 export function MarketplaceCard({ item }: MarketplaceCardProps) {
   const { user } = useAuth();
-  const { toggleSaveItem, incrementItemViews, deleteMarketplaceItem, isItemSaved } = useData();
-  const { getOrCreateConversation } = useChat();
+  const {
+    toggleSaveItem,
+    deleteMarketplaceItem,
+    isItemSaved,
+    addCommentToMarketplaceItem,
+    deleteCommentFromMarketplaceItem,
+  } = useData();
+  const { getOrCreateConversation, getConversationCountForItem } = useChat();
 
   const [showMap, setShowMap] = useState(false);
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const isSaved = isItemSaved(item.id);
   const isOwnItem = user?.id === item.seller.id;
   const isAdmin = user?.role === 'Administrator';
@@ -38,14 +48,8 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
   ];
   const tradeSpot = TRADE_SPOTS[parseInt(item.id, 10) % TRADE_SPOTS.length] ?? TRADE_SPOTS[0];
 
-  // Increment views when component mounts (simulate viewing)
-  useEffect(() => {
-    const hasViewed = sessionStorage.getItem(`viewed_item_${item.id}`);
-    if (!hasViewed) {
-      incrementItemViews(item.id);
-      sessionStorage.setItem(`viewed_item_${item.id}`, 'true');
-    }
-  }, [item.id, incrementItemViews]);
+  // Views are no longer counted just for being in the feed — see
+  // MarketplaceDetailSheet, which increments on genuine detail-view open.
 
   const handleSave = async () => {
     try {
@@ -84,6 +88,24 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
     }
   };
 
+  const handleAddComment = async (text: string) => {
+    try {
+      await addCommentToMarketplaceItem(item.id, text);
+      toast.success('Comment added');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to add comment');
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      await deleteCommentFromMarketplaceItem(item.id, commentId);
+      toast.success('Comment deleted');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete comment');
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -118,11 +140,17 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
     <article className="border-b border-[#f0f0f0] px-3 md:px-4 py-3 md:py-4 hover:bg-[#fafafa] transition-colors">
       <div className="flex gap-3 items-start">
 
-        {/* Left: Fixed square thumbnail */}
-        <div className="shrink-0 w-[88px] h-[88px] rounded-xl overflow-hidden border border-[#f0f0f0] bg-[#f5f5f5]">
-          {item.image ? (
+        {/* Left: Fixed square thumbnail — always just the cover photo
+            (images[0]); the rest only show up in the detail view. */}
+        <button
+          type="button"
+          onClick={() => setIsDetailOpen(true)}
+          aria-label={`View details for ${item.title}`}
+          className="relative shrink-0 w-[88px] h-[88px] rounded-xl overflow-hidden border border-[#f0f0f0] bg-[#f5f5f5]"
+        >
+          {item.images[0] ? (
             <ImageWithFallback
-              src={item.image}
+              src={item.images[0]}
               alt={item.title}
               className="w-full h-full object-cover"
             />
@@ -133,7 +161,12 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
               </span>
             </div>
           )}
-        </div>
+          {item.images.length > 1 && (
+            <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] font-medium px-1.5 py-0.5 rounded-full">
+              1/{item.images.length}
+            </span>
+          )}
+        </button>
 
         {/* Right: All details stacked vertically */}
         <div className="flex-1 min-w-0">
@@ -244,8 +277,16 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
               </div>
               <div className="flex items-center gap-1" title="People who contacted the seller">
                 <MessageCircle className="w-3.5 h-3.5" strokeWidth={1.5} />
-                <span className="text-[11px]">{Math.max(1, Math.floor(item.views * 0.08 + item.savedBy.length * 1.5))}</span>
+                <span className="text-[11px]">{getConversationCountForItem(item.id, 'marketplace')}</span>
               </div>
+              <button
+                onClick={() => setIsCommentsOpen(true)}
+                className="flex items-center gap-1 hover:text-black transition-colors"
+                title="Comments"
+              >
+                <MessageSquare className="w-3.5 h-3.5" strokeWidth={1.5} />
+                <span className="text-[11px]">{item.comments.length}</span>
+              </button>
             </div>
 
             {!isOwnItem && (
@@ -259,6 +300,23 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
           </div>
         </div>
       </div>
+
+      <CommentsSheet
+        open={isCommentsOpen}
+        onOpenChange={setIsCommentsOpen}
+        comments={item.comments}
+        currentUserId={user?.id}
+        currentUserName={user?.name}
+        isAdmin={isAdmin}
+        onAddComment={handleAddComment}
+        onDeleteComment={handleDeleteComment}
+      />
+
+      <MarketplaceDetailSheet
+        open={isDetailOpen}
+        onOpenChange={setIsDetailOpen}
+        item={item}
+      />
     </article>
   );
 }

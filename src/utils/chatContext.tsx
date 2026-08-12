@@ -39,6 +39,7 @@ interface ChatContextType {
   getConversationMessages: (conversationId: string) => Message[];
   getConversation: (conversationId: string) => Conversation | undefined;
   getTotalUnreadCount: () => number;
+  getConversationCountForItem: (itemId: string, type?: NonNullable<Conversation['context']>['type']) => number;
   deleteConversation: (conversationId: string) => void;
 }
 
@@ -346,6 +347,17 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getTotalUnreadCount = useCallback((): number =>
     conversations.reduce((sum, conv) => sum + conv.unreadCount, 0), [conversations]);
 
+  // ── getConversationCountForItem ─────────────────────────────────────────
+  // Real inquiry count for a marketplace/event listing — how many distinct
+  // conversations reference this item, e.g. for the "message" stat shown on
+  // MarketplaceCard. Defaults to 'marketplace' since that's its only caller today.
+  const getConversationCountForItem = useCallback((
+    itemId: string,
+    type: NonNullable<Conversation['context']>['type'] = 'marketplace'
+  ): number =>
+    conversations.filter((c) => c.context?.type === type && c.context?.itemId === itemId).length,
+    [conversations]);
+
   // ── deleteConversation ────────────────────────────────────────────────
   const deleteConversation = useCallback((conversationId: string) => {
     setConversations((prev) => prev.filter((c) => c.id !== conversationId));
@@ -370,6 +382,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       getConversationMessages,
       getConversation,
       getTotalUnreadCount,
+      getConversationCountForItem,
       deleteConversation,
     }),
     [
@@ -381,6 +394,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       getConversationMessages,
       getConversation,
       getTotalUnreadCount,
+      getConversationCountForItem,
       deleteConversation,
     ]
   );

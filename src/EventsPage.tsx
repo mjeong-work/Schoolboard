@@ -115,9 +115,14 @@ export default function EventsPage() {
     // Apply tab filter — compare date strings directly to avoid UTC-vs-local timezone skew
     const todayStr = new Date().toLocaleDateString('en-CA'); // "YYYY-MM-DD" in local time
 
+    // When a specific calendar date is picked, that explicit choice should win —
+    // the upcoming/past date-boundary filter would otherwise always empty the
+    // result for a past date while the "Upcoming" (or a future date while
+    // "Past") tab is active. The RSVP tab's participant filter isn't
+    // date-bound, so it always applies regardless of a selected date.
     switch (selectedTab) {
       case 'upcoming':
-        result = result.filter((event) => event.date >= todayStr);
+        if (!selectedDate) result = result.filter((event) => event.date >= todayStr);
         result.sort((a, b) => a.date.localeCompare(b.date));
         break;
       case 'rsvp':
@@ -125,7 +130,7 @@ export default function EventsPage() {
         result.sort((a, b) => a.date.localeCompare(b.date));
         break;
       case 'past':
-        result = result.filter((event) => event.date < todayStr);
+        if (!selectedDate) result = result.filter((event) => event.date < todayStr);
         result.sort((a, b) => b.date.localeCompare(a.date));
         break;
     }
@@ -268,11 +273,17 @@ export default function EventsPage() {
               >
                 Upcoming
               </TabsTrigger>
-              <TabsTrigger 
-                value="rsvp" 
+              <TabsTrigger
+                value="rsvp"
                 className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none"
               >
                 My RSVPs
+              </TabsTrigger>
+              <TabsTrigger
+                value="past"
+                className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none"
+              >
+                Past
               </TabsTrigger>
             </TabsList>
           </Tabs>

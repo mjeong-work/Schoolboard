@@ -47,15 +47,21 @@ export function NavigationBar({ activeTab = 'community' }: NavigationBarProps) {
               nav links already show the active page, so the brand stays as-is. */}
           <div className="flex items-center gap-6">
             <div className="flex flex-col justify-center leading-none md:flex-row md:items-center md:gap-6">
-              <span className="hidden md:inline text-[#111] font-bold font-[Bayon] text-[24px]">
-                Campus Connect
-              </span>
-              <span className="md:hidden text-[10px] font-semibold tracking-wide text-[#999] uppercase">
-                Campus Connect
-              </span>
-              <h1 className="md:hidden text-[19px] font-bold font-[Roboto] text-[#111] mt-0.5">
-                {PAGE_TITLES[activeTab] ?? 'Campus Connect'}
-              </h1>
+              <a href="#community" className="contents">
+                <span className="hidden md:inline text-[#111] font-bold font-[Bayon] text-[24px]">
+                  Campus Connect
+                </span>
+              </a>
+              <a href="#community" className="contents">
+                <span className="md:hidden text-[10px] font-semibold tracking-wide text-[#999] uppercase">
+                  Campus Connect
+                </span>
+              </a>
+              <a href="#community" className="contents">
+                <h1 className="md:hidden text-[19px] font-bold font-[Roboto] text-[#111] mt-0.5">
+                  {PAGE_TITLES[activeTab] ?? 'Campus Connect'}
+                </h1>
+              </a>
             </div>
 
             {/* Desktop Navigation */}

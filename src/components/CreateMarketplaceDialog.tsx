@@ -11,6 +11,8 @@ import {
   SelectValue,
 } from './ui/select';
 import { Camera, X } from 'lucide-react';
+import { MARKETPLACE_CATEGORIES } from '../utils/marketplaceCategories';
+import { toast } from 'sonner@2.0.3';
 
 interface CreateMarketplaceDialogProps {
   open: boolean;
@@ -21,17 +23,16 @@ interface CreateMarketplaceDialogProps {
     price: number;
     condition: string;
     description: string;
-    image?: string;
+    images: string[];
   }) => void;
 }
 
-const CATEGORY_OPTIONS = [
-  'Textbooks', 'Electronics', 'Furniture', 'Appliances', 'Sports & Outdoors',
-  'School Supplies', 'Musical Instruments', 'Clothing', 'Other',
-];
-
 const CONDITION_OPTIONS = ['New', 'Like New', 'Good', 'Fair', 'Poor'];
 const DESCRIPTION_MAX_LENGTH = 1000;
+// The thumbnail on the card only ever shows images[0] — the first photo
+// added here becomes the cover. The rest are only visible in the expanded
+// detail view.
+const MAX_IMAGES = 6;
 
 export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: CreateMarketplaceDialogProps) {
   const [title, setTitle] = useState('');
@@ -39,7 +40,7 @@ export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: Create
   const [price, setPrice] = useState('');
   const [condition, setCondition] = useState('');
   const [description, setDescription] = useState('');
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [images, setImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
@@ -48,7 +49,7 @@ export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: Create
     setPrice('');
     setCondition('');
     setDescription('');
-    setUploadedImage(null);
+    setImages([]);
   };
 
   const closeAndReset = (next: boolean) => {
@@ -67,18 +68,35 @@ export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: Create
       price: parseFloat(price),
       condition,
       description: description.trim(),
-      image: uploadedImage || undefined,
+      images,
     });
 
     closeAndReset(false);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => setUploadedImage(reader.result as string);
-    reader.readAsDataURL(file);
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = ''; // allow re-selecting the same file(s) later
+    if (!files.length) return;
+
+    const remaining = MAX_IMAGES - images.length;
+    if (remaining <= 0) {
+      toast(`You can add up to ${MAX_IMAGES} photos.`);
+      return;
+    }
+    if (files.length > remaining) {
+      toast(`Only added the first ${remaining} photo${remaining === 1 ? '' : 's'} — ${MAX_IMAGES} max.`);
+    }
+
+    files.slice(0, remaining).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => setImages((prev) => [...prev, reader.result as string]);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   const fieldClass = 'border-[#e5e7eb] bg-white rounded-md';
@@ -111,35 +129,52 @@ export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: Create
 
           {/* Scrollable form */}
           <div className="flex-1 overflow-y-auto">
-            {/* Photo upload */}
-            {uploadedImage ? (
-              <div className="relative w-full h-48 sm:h-56 shrink-0 overflow-hidden bg-[#f5f5f5]">
-                <img src={uploadedImage} alt="Item preview" className="w-full h-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => setUploadedImage(null)}
-                  className="absolute top-2 right-2 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center transition-colors"
-                  aria-label="Remove photo"
-                >
-                  <X className="w-4 h-4 text-white" />
-                </button>
+            {/* Photo upload — multiple photos; the first one becomes the
+                cover shown on the card thumbnail, the rest only show up in
+                the expanded detail view. */}
+            <div className="border-b border-[#f0f0f0] p-4">
+              <Label className="text-[#666] mb-2 block">
+                Photos {images.length > 0 && `(${images.length}/${MAX_IMAGES})`}
+              </Label>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {images.map((img, index) => (
+                  <div
+                    key={index}
+                    className="relative shrink-0 w-24 h-24 rounded-lg overflow-hidden border border-[#e5e7eb] bg-[#f5f5f5]"
+                  >
+                    <img src={img} alt={`Photo ${index + 1}`} className="w-full h-full object-cover" />
+                    {index === 0 && (
+                      <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded-full">
+                        Cover
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      className="absolute top-1 right-1 w-5 h-5 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center transition-colors"
+                      aria-label={`Remove photo ${index + 1}`}
+                    >
+                      <X className="w-3 h-3 text-white" />
+                    </button>
+                  </div>
+                ))}
+                {images.length < MAX_IMAGES && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="shrink-0 w-24 h-24 rounded-lg border border-dashed border-[#e5e7eb] flex flex-col items-center justify-center gap-1 hover:bg-[#fafafa] transition-colors"
+                  >
+                    <Camera className="w-5 h-5 text-[#666]" />
+                    <span className="text-[11px] text-[#666]">Add photo</span>
+                  </button>
+                )}
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full h-40 sm:h-48 shrink-0 flex flex-col items-center justify-center gap-2 bg-white border-b border-[#f0f0f0] hover:bg-[#fafafa] transition-colors"
-              >
-                <div className="w-10 h-10 rounded-full border border-[#e5e7eb] flex items-center justify-center">
-                  <Camera className="w-5 h-5 text-[#666]" />
-                </div>
-                <span className="text-sm text-[#666]">Add a photo</span>
-              </button>
-            )}
+            </div>
             <input
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
               onChange={handleImageUpload}
             />
@@ -170,7 +205,7 @@ export function CreateMarketplaceDialog({ open, onOpenChange, onSubmit }: Create
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {CATEGORY_OPTIONS.map((opt) => (
+                    {MARKETPLACE_CATEGORIES.map((opt) => (
                       <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                     ))}
                   </SelectContent>

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { getAvatarColor } from '../utils/anonymousName';
+import { useEffect, useState } from 'react';
+import { getAnonymousName, getAvatarColor } from '../utils/anonymousName';
 import { NavigationBar } from './NavigationBar';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -14,7 +14,7 @@ export const MessagesPage: React.FC = () => {
   const [messageText, setMessageText] = useState('');
   const [selectedTab, setSelectedTab] = useState('all');
 
-  const { conversations: liveConversations, getConversationMessages, sendMessage } = useChat();
+  const { conversations: liveConversations, getConversationMessages, sendMessage, markAsRead } = useChat();
   const { currentUser } = useAuth();
 
   const allConversations = liveConversations.map(c => {
@@ -39,9 +39,20 @@ export const MessagesPage: React.FC = () => {
 
   const selectedConversation = allConversations.find(c => c.id === selectedConversationId);
 
-  const filteredConversations = selectedTab === 'unread'
-    ? allConversations.filter(c => c.unreadCount > 0)
+  // "Read" = conversations with no unread messages left (unreadCount === 0),
+  // i.e. everything the user has already caught up on.
+  const filteredConversations = selectedTab === 'read'
+    ? allConversations.filter(c => c.unreadCount === 0)
     : allConversations;
+
+  // Mark the conversation as read as soon as its detail view is opened —
+  // previously only the floating ChatWindow did this, so opening a
+  // conversation from this list left its unread count untouched.
+  useEffect(() => {
+    if (selectedConversationId) {
+      markAsRead(selectedConversationId);
+    }
+  }, [selectedConversationId, markAsRead]);
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -236,11 +247,11 @@ export const MessagesPage: React.FC = () => {
               >
                 All
               </TabsTrigger>
-              <TabsTrigger 
-                value="unread" 
+              <TabsTrigger
+                value="read"
                 className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none"
               >
-                Unread
+                Read
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -306,7 +317,9 @@ export const MessagesPage: React.FC = () => {
           </div>
         ) : (
           <div className="py-16 px-4 text-center">
-            <p className="text-[#999] text-sm">No unread messages</p>
+            <p className="text-[#999] text-sm">
+              {selectedTab === 'read' ? 'No read conversations yet' : 'No messages yet'}
+            </p>
           </div>
         )}
       </main>

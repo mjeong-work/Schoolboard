@@ -41,6 +41,11 @@ export function EventCard({ event }: EventCardProps) {
   const hasRSVPed = hasUserRSVPed(event.id);
   const isOwnEvent = user?.id === event.authorId;
   const isAdmin = user?.role === 'Administrator';
+  // Past events stay fully viewable (RSVP/like/comment always work) but the
+  // author can no longer edit them — only compare date strings to avoid
+  // UTC-vs-local timezone skew.
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const isPastEvent = event.date < todayStr;
 
   const handleLike = () => {
     toggleLikeEvent(event.id);
@@ -139,7 +144,7 @@ export function EventCard({ event }: EventCardProps) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  {isOwnEvent && (
+                  {isOwnEvent && !isPastEvent && (
                     <DropdownMenuItem
                       className="cursor-pointer"
                       onClick={() => setIsEditOpen(true)}

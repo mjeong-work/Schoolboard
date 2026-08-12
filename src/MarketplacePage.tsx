@@ -4,10 +4,12 @@ import { NavigationBar } from './components/NavigationBar';
 import { MarketplaceCard } from './components/MarketplaceCard';
 import { FloatingActionButton } from './components/FloatingActionButton';
 import { CreateMarketplaceDialog } from './components/CreateMarketplaceDialog';
+import { Button } from './components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
 import { toast } from 'sonner@2.0.3';
 import { useData } from './utils/dataContext';
 import { useAuth } from './utils/authContext';
+import { MARKETPLACE_CATEGORIES } from './utils/marketplaceCategories';
 
 export default function MarketplacePage() {
   const { user } = useAuth();
@@ -17,6 +19,7 @@ export default function MarketplacePage() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [sortBy, setSortBy] = useState<'latest' | 'nearest'>('latest');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   // Deterministic mock coords per item for geo sort
   const mockDist = (id: string) => {
@@ -32,7 +35,7 @@ export default function MarketplacePage() {
     price: number;
     condition: string;
     description: string;
-    image?: string;
+    images: string[];
   }) => {
     try {
       await addMarketplaceItem({
@@ -41,7 +44,7 @@ export default function MarketplacePage() {
         price: newListing.price,
         condition: newListing.condition,
         description: newListing.description,
-        image: newListing.image || null,
+        images: newListing.images,
         seller: {
           name: user?.name || 'Anonymous Student',
           contact: '',
@@ -70,6 +73,11 @@ export default function MarketplacePage() {
       );
     }
 
+    // Apply category filter
+    if (selectedCategory !== 'all') {
+      result = result.filter((item) => item.category === selectedCategory);
+    }
+
     // Apply tab filter
     if (selectedTab === 'interested') {
       // Show only saved/hearted items
@@ -84,7 +92,7 @@ export default function MarketplacePage() {
     }
 
     return result;
-  }, [marketplaceItems, searchQuery, selectedTab, sortBy, user?.id]);
+  }, [marketplaceItems, searchQuery, selectedCategory, selectedTab, sortBy, user?.id]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -120,7 +128,23 @@ export default function MarketplacePage() {
                 </button>
               </>
             ) : (
-              <div className="flex items-center gap-1 ml-auto">
+              <div className="flex items-center gap-2 ml-auto">
+                {/* Category filter dropdown */}
+                <div className="relative">
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="appearance-none bg-[#f5f5f5] rounded-full pl-3 pr-7 py-2 text-sm text-black outline-none cursor-pointer hover:bg-[#ebebeb] transition-colors"
+                  >
+                    <option value="all">All Categories</option>
+                    {MARKETPLACE_CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                  <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[#999]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
                 {/* Sort toggle */}
                 <div className="flex items-center bg-[#f3f4f6] rounded-lg p-0.5 gap-0.5">
                   {(['latest', 'nearest'] as const).map(v => (
@@ -141,6 +165,15 @@ export default function MarketplacePage() {
                 >
                   <Search className="w-5 h-5 text-black" strokeWidth={1.5} />
                 </button>
+                {/* Hidden on mobile — the floating "+" button already covers
+                    listing creation there, so this avoided showing two create
+                    controls on the same screen. */}
+                <Button
+                  onClick={() => setIsCreateDialogOpen(true)}
+                  className="hidden sm:inline-flex bg-black text-white hover:bg-black/90 rounded-full px-4 py-1.5 h-auto text-sm font-[Roboto]"
+                >
+                  Post
+                </Button>
               </div>
             )}
           </div>

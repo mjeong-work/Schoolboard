@@ -55,7 +55,8 @@ export interface MarketplaceItem {
   price: number;
   condition: string;
   description: string;
-  image: string;
+  // Ordered photo gallery — images[0] is the cover/thumbnail image.
+  images: string[];
   seller: {
     name: string;
     contact: string;
@@ -65,6 +66,7 @@ export interface MarketplaceItem {
   postedDate: string;
   views: number;
   savedBy: string[];
+  comments: Comment[];
 }
 
 interface DataContextType {
@@ -88,11 +90,13 @@ interface DataContextType {
   toggleRSVPEvent: (eventId: string) => Promise<void>;
   isEventLiked: (eventId: string) => boolean;
   hasRSVPed: (eventId: string) => boolean;
-  addMarketplaceItem: (item: Omit<MarketplaceItem, 'id' | 'postedDate' | 'views' | 'savedBy' | 'seller'> & { seller: Omit<MarketplaceItem['seller'], 'id'> }) => Promise<void>;
+  addMarketplaceItem: (item: Omit<MarketplaceItem, 'id' | 'postedDate' | 'views' | 'savedBy' | 'comments' | 'seller'> & { seller: Omit<MarketplaceItem['seller'], 'id'> }) => Promise<void>;
   deleteMarketplaceItem: (itemId: string) => Promise<void>;
   toggleSaveItem: (itemId: string) => Promise<void>;
   incrementItemViews: (itemId: string) => Promise<void>;
   isItemSaved: (itemId: string) => boolean;
+  addCommentToMarketplaceItem: (itemId: string, text: string) => Promise<void>;
+  deleteCommentFromMarketplaceItem: (itemId: string, commentId: string) => Promise<void>;
   getUserPosts: () => Post[];
   getUserEvents: () => Event[];
   getUserMarketplaceItems: () => MarketplaceItem[];
@@ -156,7 +160,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .select(`
         *,
         profiles!marketplace_items_seller_id_fkey (name, verified),
-        marketplace_saves (user_id)
+        marketplace_saves (user_id),
+        marketplace_comments (id, text, created_at, profiles!marketplace_comments_author_id_fkey (name, id))
       `)
       .order('created_at', { ascending: false });
 
@@ -169,7 +174,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       price: Number(item.price),
       condition: item.condition,
       description: item.description,
-      image: item.image_url || '',
+      // Older rows only have image_url (pre-multi-image); fall back to that
+      // as a single-element gallery so they still render correctly.
+      images: (item.images && item.images.length > 0)
+        ? item.images
+        : (item.image_url ? [item.image_url] : []),
       seller: {
         name: item.profiles?.name || getAnonymousName(item.seller_id),
         contact: item.contact,
@@ -179,6 +188,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       postedDate: item.created_at?.split('T')[0],
       views: item.views,
       savedBy: (item.marketplace_saves || []).map((s: any) => s.user_id),
+      comments: (item.marketplace_comments || []).map((c: any) => ({
+        id: c.id,
+        text: c.text,
+        author: c.profiles?.name || getAnonymousName(c.profiles?.id || c.user_id || c.id),
+        authorId: c.profiles?.id || '',
+        date: c.created_at?.split('T')[0],
+      })),
     }));
 
     setMarketplaceItems(formatted);
@@ -489,7 +505,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       price: itemData.price,
       condition: itemData.condition,
       description: itemData.description,
-      image_url: itemData.image || null,
+      // image_url stays populated with the cover photo for anything that
+      // still only reads the single-image column; images holds the full gallery.
+      image_url: itemData.images?.[0] || null,
+      images: itemData.images ?? [],
       seller_id: user.id,
       contact: itemData.seller.contact,
     });
@@ -539,6 +558,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return item ? item.savedBy.includes(user.id) : false;
   };
 
+  const addCommentToMarketplaceItem = async (itemId: string, text: string) => {
+    if (!user || !text.trim()) return;
+    const { error } = await supabase.from('marketplace_comments').insert({
+      item_id: itemId,
+      author_id: user.id,
+      text: text.trim(),
+    });
+    if (error) { console.error('[addCommentToMarketplaceItem]', error); throw new Error(error.message); }
+    await fetchMarketplaceItems();
+  };
+
+  const deleteCommentFromMarketplaceItem = async (itemId: string, commentId: string) => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from('marketplace_comments')
+      .delete()
+      .eq('id', commentId)
+      .select('id');
+    if (error) {
+      console.error('[deleteCommentFromMarketplaceItem] Supabase error:', error);
+      throw new Error(error.message);
+    }
+    if (!data || data.length === 0) {
+      console.warn('[deleteCommentFromMarketplaceItem] No rows deleted — RLS may be blocking for commentId:', commentId);
+      throw new Error('Delete was rejected — you may not have permission to delete this comment.');
+    }
+    await fetchMarketplaceItems();
+  };
+
   const getUserPosts = () => user ? posts.filter(p => p.authorId === user.id) : [];
   const getUserEvents = () => user ? events.filter(e => e.participants.includes(user.id)) : [];
   const getUserMarketplaceItems = () => user ? marketplaceItems.filter(item => item.seller.id === user.id) : [];
@@ -556,6 +604,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addPost, updatePost, deletePost, toggleLikePost, addCommentToPost, deleteCommentFromPost, isPostLiked,
       addEvent, updateEvent, deleteEvent, toggleLikeEvent, addCommentToEvent, deleteCommentFromEvent, toggleRSVPEvent, isEventLiked, hasRSVPed,
       addMarketplaceItem, deleteMarketplaceItem, toggleSaveItem, incrementItemViews, isItemSaved,
+      addCommentToMarketplaceItem, deleteCommentFromMarketplaceItem,
       getUserPosts, getUserEvents, getUserMarketplaceItems, getUserSavedItems, getUserStats,
     }}>
       {children}

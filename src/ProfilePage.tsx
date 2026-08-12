@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { NavigationBar } from './components/NavigationBar';
+import { MarketplaceCard } from './components/MarketplaceCard';
 import { Card } from './components/ui/card';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -23,7 +24,7 @@ import {
 
 export default function ProfilePage() {
   const { user } = useAuth();
-  const { getUserPosts, getUserEvents, getUserMarketplaceItems, getUserStats, isLoading } = useData();
+  const { getUserPosts, getUserEvents, getUserMarketplaceItems, getUserSavedItems, getUserStats, isLoading } = useData();
   const [activeTab, setActiveTab] = useState('posts');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,6 +35,7 @@ export default function ProfilePage() {
   const userPosts = getUserPosts().filter(p => matches(p.title));
   const userEvents = getUserEvents().filter(e => matches(e.title));
   const userItems = getUserMarketplaceItems().filter(i => matches(i.title));
+  const savedItems = getUserSavedItems().filter(i => matches(i.title));
   const stats = getUserStats();
 
   const name = user?.name || 'User';
@@ -208,6 +210,13 @@ export default function ProfilePage() {
               <ShoppingBag className="w-4 h-4" />
               My Items
             </TabsTrigger>
+            <TabsTrigger
+              value="saved"
+              className="shrink-0 whitespace-nowrap bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
+            >
+              <Heart className="w-4 h-4" />
+              Saved
+            </TabsTrigger>
           </TabsList>
 
           {/* My Posts */}
@@ -365,6 +374,36 @@ export default function ProfilePage() {
                   </div>
                 </Card>
               ))
+            )}
+          </TabsContent>
+
+          {/* Saved */}
+          <TabsContent value="saved" className="space-y-0">
+            {isLoading ? (
+              <div className="py-12 text-center text-[#999] font-[Roboto] text-sm">Loading…</div>
+            ) : savedItems.length === 0 ? (
+              <Card className="p-8 border border-[#f0f0f0] rounded-xl text-center">
+                <Heart className="w-12 h-12 text-[#d1d5db] mx-auto mb-3" />
+                {query ? (
+                  <p className="text-[#666] font-[Roboto]">No saved items match "{searchQuery}".</p>
+                ) : (
+                  <>
+                    <p className="text-[#666] font-[Roboto]">You haven't saved any items yet.</p>
+                    <Button
+                      onClick={() => window.location.hash = '#/marketplace'}
+                      className="bg-[rgb(0,0,0)] hover:bg-[#1a1a1a] text-white mt-4 px-4 py-2 rounded-lg font-[Roboto]"
+                    >
+                      Browse Marketplace
+                    </Button>
+                  </>
+                )}
+              </Card>
+            ) : (
+              <div className="border border-[#f0f0f0] rounded-xl overflow-hidden">
+                {savedItems.map((item) => (
+                  <MarketplaceCard key={item.id} item={item} />
+                ))}
+              </div>
             )}
           </TabsContent>
         </Tabs>
