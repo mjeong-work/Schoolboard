@@ -21,6 +21,7 @@ import {
   Trash2,
   Tag,
   DollarSign,
+  Eye,
 } from 'lucide-react';
 
 interface Stats {
@@ -38,6 +39,7 @@ export default function AdminPage() {
   const [allPosts, setAllPosts] = useState<any[]>([]);
   const [allListings, setAllListings] = useState<any[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; type: 'post' | 'listing' } | null>(null);
+  const [revealedAuthors, setRevealedAuthors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     Promise.all([loadPendingUsers(), loadStats(), loadAllPosts(), loadAllListings()]).finally(() => setLoading(false));
@@ -71,7 +73,7 @@ export default function AdminPage() {
   const loadAllPosts = async () => {
     const { data } = await supabase
       .from('posts')
-      .select('id, title, category, created_at, author_id, profiles!posts_author_id_fkey(name)')
+      .select('id, title, category, created_at, author_id')
       .order('created_at', { ascending: false });
     setAllPosts(data || []);
   };
@@ -79,9 +81,29 @@ export default function AdminPage() {
   const loadAllListings = async () => {
     const { data } = await supabase
       .from('marketplace_items')
-      .select('id, title, category, price, created_at, seller_id, profiles!marketplace_items_seller_id_fkey(name)')
+      .select('id, title, category, price, created_at, seller_id')
       .order('created_at', { ascending: false });
     setAllListings(data || []);
+  };
+
+  const handleRevealAuthor = async (id: string, type: 'post' | 'listing') => {
+    const rpcName = type === 'post' ? 'admin_reveal_post_author' : 'admin_reveal_listing_seller';
+    const argName = type === 'post' ? 'p_post_id' : 'p_item_id';
+    const { data, error } = await supabase.rpc(rpcName, { [argName]: id });
+
+    if (error) {
+      toast.error('Could not reveal author');
+      return;
+    }
+
+    const author = Array.isArray(data) ? data[0] : data;
+    if (!author) {
+      toast.error('No author found');
+      return;
+    }
+
+    const identity = [author.name, author.email].filter(Boolean).join(' - ');
+    setRevealedAuthors((prev) => ({ ...prev, [`${type}:${id}`]: identity || author.id }));
   };
 
   const handleDeletePost = async (postId: string) => {
@@ -266,7 +288,10 @@ export default function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-[#111] font-[Roboto] truncate">{p.title}</p>
                         <div className="flex items-center gap-3 mt-1 text-xs text-[#666] font-[Roboto]">
-                          <span>{p.profiles?.name ?? getAnonymousName(p.author_id || p.id)}</span>
+                          <span>{getAnonymousName(p.id)}</span>
+                          {revealedAuthors[`post:${p.id}`] && (
+                            <span className="text-[#dc2626]">{revealedAuthors[`post:${p.id}`]}</span>
+                          )}
                           <span className="flex items-center gap-1"><Tag className="w-3 h-3" />{p.category}</span>
                           <span>{p.created_at?.split('T')[0]}</span>
                         </div>
@@ -284,12 +309,21 @@ export default function AdminPage() {
                           >Cancel</Button>
                         </div>
                       ) : (
-                        <Button
-                          onClick={() => setConfirmDelete({ id: p.id, type: 'post' })}
-                          className="shrink-0 h-8 w-8 p-0 bg-transparent border border-[#f0f0f0] text-[#999] hover:text-[#dc2626] hover:border-[#dc2626] hover:bg-[#fef2f2]"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            onClick={() => handleRevealAuthor(p.id, 'post')}
+                            title="Reveal author"
+                            className="h-8 w-8 p-0 bg-transparent border border-[#f0f0f0] text-[#999] hover:text-[#111] hover:bg-[#f5f5f5]"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            onClick={() => setConfirmDelete({ id: p.id, type: 'post' })}
+                            className="h-8 w-8 p-0 bg-transparent border border-[#f0f0f0] text-[#999] hover:text-[#dc2626] hover:border-[#dc2626] hover:bg-[#fef2f2]"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -314,7 +348,10 @@ export default function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-[#111] font-[Roboto] truncate">{item.title}</p>
                         <div className="flex items-center gap-3 mt-1 text-xs text-[#666] font-[Roboto]">
-                          <span>{item.profiles?.name ?? getAnonymousName(item.seller_id || item.id)}</span>
+                          <span>{getAnonymousName(item.id)}</span>
+                          {revealedAuthors[`listing:${item.id}`] && (
+                            <span className="text-[#dc2626]">{revealedAuthors[`listing:${item.id}`]}</span>
+                          )}
                           <span className="flex items-center gap-1"><Tag className="w-3 h-3" />{item.category}</span>
                           <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />{Number(item.price).toFixed(2)}</span>
                           <span>{item.created_at?.split('T')[0]}</span>
@@ -333,12 +370,21 @@ export default function AdminPage() {
                           >Cancel</Button>
                         </div>
                       ) : (
-                        <Button
-                          onClick={() => setConfirmDelete({ id: item.id, type: 'listing' })}
-                          className="shrink-0 h-8 w-8 p-0 bg-transparent border border-[#f0f0f0] text-[#999] hover:text-[#dc2626] hover:border-[#dc2626] hover:bg-[#fef2f2]"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            onClick={() => handleRevealAuthor(item.id, 'listing')}
+                            title="Reveal seller"
+                            className="h-8 w-8 p-0 bg-transparent border border-[#f0f0f0] text-[#999] hover:text-[#111] hover:bg-[#f5f5f5]"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            onClick={() => setConfirmDelete({ id: item.id, type: 'listing' })}
+                            className="h-8 w-8 p-0 bg-transparent border border-[#f0f0f0] text-[#999] hover:text-[#dc2626] hover:border-[#dc2626] hover:bg-[#fef2f2]"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>

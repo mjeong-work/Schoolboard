@@ -111,7 +111,7 @@ export function CreatePostDialog({ open, onOpenChange, onSubmit }: CreatePostDia
                     className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium shrink-0"
                     style={{ background: getAvatarColor(user?.id || '') }}
                   >
-                    {user?.name?.charAt(0) || 'A'}
+                    A
                   </div>
                   <span className="text-sm font-semibold text-[#111]">{audienceLabel}</span>
                   <ChevronDown className="w-3.5 h-3.5 text-[#666]" />

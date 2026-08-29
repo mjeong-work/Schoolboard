@@ -119,9 +119,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .from('posts')
       .select(`
         *,
-        profiles!posts_author_id_fkey (name, verified),
         post_likes (user_id),
-        post_comments (id, text, created_at, profiles!post_comments_author_id_fkey (name, id))
+        post_comments (id, author_id, text, created_at)
       `)
       .order('created_at', { ascending: false });
 
@@ -136,16 +135,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       content: p.content,
       image: p.image_url,
       category: p.category,
-      author: p.profiles?.name || getAnonymousName(p.author_id || p.id),
+      author: getAnonymousName(p.id),
       authorId: p.author_id,
-      verified: p.profiles?.verified || false,
+      verified: false,
       date: p.created_at?.split('T')[0],
       likes: (p.post_likes || []).map((l: any) => l.user_id),
       comments: (p.post_comments || []).map((c: any) => ({
         id: c.id,
         text: c.text,
-        author: c.profiles?.name || getAnonymousName(c.profiles?.id || c.user_id || c.id),
-        authorId: c.profiles?.id || '',
+        author: getAnonymousName(c.id),
+        authorId: c.author_id,
         date: c.created_at?.split('T')[0],
       })),
     }));
@@ -161,7 +160,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         *,
         profiles!marketplace_items_seller_id_fkey (name, verified),
         marketplace_saves (user_id),
-        marketplace_comments (id, text, created_at, profiles!marketplace_comments_author_id_fkey (name, id))
+        marketplace_comments (id, author_id, text, created_at)
       `)
       .order('created_at', { ascending: false });
 
@@ -191,8 +190,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       comments: (item.marketplace_comments || []).map((c: any) => ({
         id: c.id,
         text: c.text,
-        author: c.profiles?.name || getAnonymousName(c.profiles?.id || c.user_id || c.id),
-        authorId: c.profiles?.id || '',
+        author: getAnonymousName(c.id),
+        authorId: c.author_id,
         date: c.created_at?.split('T')[0],
       })),
     }));
