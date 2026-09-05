@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Heart, MessageCircle, Calendar, Clock, MapPin, Users, CheckCircle, Send, MoreHorizontal, UserPlus } from 'lucide-react';
-import { getAvatarColor } from '../utils/anonymousName';
+import { getAvatarColor, getAnonymousName } from '../utils/anonymousName';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useData, type Event } from '../utils/dataContext';
 import { useAuth } from '../utils/authContext';
@@ -41,17 +41,24 @@ export function EventCard({ event }: EventCardProps) {
   const hasRSVPed = hasUserRSVPed(event.id);
   const isOwnEvent = user?.id === event.authorId;
   const isAdmin = user?.role === 'Administrator';
-  // Past events stay fully viewable (RSVP/like/comment always work) but the
-  // author can no longer edit them — only compare date strings to avoid
-  // UTC-vs-local timezone skew.
+  // Past events stay visible and commentable, but regular users cannot modify
+  // the event state after the date has passed.
   const todayStr = new Date().toLocaleDateString('en-CA');
   const isPastEvent = event.date < todayStr;
 
   const handleLike = () => {
+    if (isPastEvent) {
+      toast('Likes are closed for past events.');
+      return;
+    }
     toggleLikeEvent(event.id);
   };
 
   const handleRSVP = () => {
+    if (isPastEvent) {
+      toast('RSVP is closed for past events.');
+      return;
+    }
     toggleRSVPEvent(event.id);
     if (!hasRSVPed) {
       toast.success('RSVP confirmed!');
@@ -98,7 +105,8 @@ export function EventCard({ event }: EventCardProps) {
       const conversationId = await getOrCreateConversation(
         event.authorId,
         event.author,
-        { type: 'event', itemId: event.id, itemTitle: event.title }
+        { type: 'event', itemId: event.id, itemTitle: event.title },
+        getAnonymousName(`${event.id}:${user.id}`)
       );
       if (!conversationId) {
         toast.error('Could not start conversation. Please try again.');
@@ -134,6 +142,11 @@ export function EventCard({ event }: EventCardProps) {
                   <span>Going</span>
                 </div>
               )}
+              {isPastEvent && (
+                <div className="text-xs text-[#666] bg-[#f3f4f6] px-2 py-0.5 rounded-full">
+                  Past event
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[#999] text-sm font-[Roboto]">{formatDate(event.date)}</span>
@@ -152,7 +165,7 @@ export function EventCard({ event }: EventCardProps) {
                       Edit event
                     </DropdownMenuItem>
                   )}
-                  {(isOwnEvent || isAdmin) && (
+                  {((isOwnEvent && !isPastEvent) || isAdmin) && (
                     <DropdownMenuItem
                       className="cursor-pointer text-red-600 focus:text-red-600"
                       onClick={handleDeleteEvent}
@@ -221,14 +234,17 @@ export function EventCard({ event }: EventCardProps) {
             {/* RSVP Button */}
             <button
               onClick={handleRSVP}
+              disabled={isPastEvent}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                hasRSVPed
+                isPastEvent
+                  ? 'bg-gray-100 text-[#999] cursor-not-allowed'
+                  : hasRSVPed
                   ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
                   : 'bg-black text-white hover:bg-black/80'
               }`}
             >
               <UserPlus className="w-4 h-4" strokeWidth={2} />
-              {hasRSVPed ? 'Going' : 'RSVP'}
+              {isPastEvent ? 'Closed' : hasRSVPed ? 'Going' : 'RSVP'}
             </button>
 
             {/* Contact Host - Only if not own event */}
@@ -247,7 +263,10 @@ export function EventCard({ event }: EventCardProps) {
           <div className="flex items-center gap-1 -ml-2">
             <button
               onClick={handleLike}
-              className="flex items-center gap-1.5 p-2 hover:bg-black/5 rounded-full transition-colors group"
+              disabled={isPastEvent}
+              className={`flex items-center gap-1.5 p-2 rounded-full transition-colors group ${
+                isPastEvent ? 'cursor-not-allowed opacity-50' : 'hover:bg-black/5'
+              }`}
             >
               <Heart 
                 className={`w-5 h-5 transition-colors ${
@@ -277,7 +296,7 @@ export function EventCard({ event }: EventCardProps) {
         onOpenChange={setShowComments}
         comments={event.comments}
         currentUserId={user?.id}
-        currentUserName={user?.name}
+        currentUserName={undefined}
         isAdmin={isAdmin}
         onAddComment={handleAddComment}
         onDeleteComment={handleDeleteComment}

@@ -15,7 +15,7 @@ export default function EventsPage() {
   const { events, addEvent } = useData();
   const { user } = useAuth();
   const [isCreateEventOpen, setIsCreateEventOpen] = useState(false);
-  const [selectedTab, setSelectedTab] = useState('upcoming');
+  const [selectedTab, setSelectedTab] = useState('all');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -121,6 +121,9 @@ export default function EventsPage() {
     // "Past") tab is active. The RSVP tab's participant filter isn't
     // date-bound, so it always applies regardless of a selected date.
     switch (selectedTab) {
+      case 'all':
+        result.sort((a, b) => a.date.localeCompare(b.date));
+        break;
       case 'upcoming':
         if (!selectedDate) result = result.filter((event) => event.date >= todayStr);
         result.sort((a, b) => a.date.localeCompare(b.date));
@@ -137,7 +140,7 @@ export default function EventsPage() {
 
     // Apply date filter if a date is selected
     if (selectedDate) {
-      const selectedDateString = selectedDate.toISOString().split('T')[0];
+      const selectedDateString = selectedDate.toLocaleDateString('en-CA');
       result = result.filter((event) => event.date === selectedDateString);
     }
 
@@ -146,7 +149,7 @@ export default function EventsPage() {
 
   // Get dates that have events for calendar highlighting
   const eventDates = useMemo(() => {
-    return events.map((event) => new Date(event.date));
+    return events.map((event) => new Date(`${event.date}T00:00:00`));
   }, [events]);
 
   const handleDateSelect = (date: Date | undefined) => {
@@ -267,6 +270,12 @@ export default function EventsPage() {
           {/* Tabs */}
           <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
             <TabsList className="w-full bg-transparent border-0 p-0 h-auto justify-start gap-8">
+              <TabsTrigger
+                value="all"
+                className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none"
+              >
+                All
+              </TabsTrigger>
               <TabsTrigger 
                 value="upcoming" 
                 className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none"
@@ -504,6 +513,8 @@ export default function EventsPage() {
                 ? 'No events scheduled for this date' 
                 : selectedTab === 'rsvp' 
                   ? 'RSVP to your first event' 
+                  : selectedTab === 'past'
+                  ? 'No past events found'
                   : 'Be the first to create an event'}
             </p>
           </div>

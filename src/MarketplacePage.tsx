@@ -46,9 +46,9 @@ export default function MarketplacePage() {
         description: newListing.description,
         images: newListing.images,
         seller: {
-          name: user?.name || 'Anonymous Student',
+          name: 'Anonymous Seller',
           contact: '',
-          verified: user?.verified || false,
+          verified: false,
         },
       });
       toast.success('Listing created successfully!');

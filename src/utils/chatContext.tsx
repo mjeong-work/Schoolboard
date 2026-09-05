@@ -33,7 +33,12 @@ interface ChatContextType {
   conversations: Conversation[];
   messages: Message[];
   // NOTE: async — callers must await before calling sendMessage
-  getOrCreateConversation: (otherUserId: string, otherUserName: string, context?: Conversation['context']) => Promise<string>;
+  getOrCreateConversation: (
+    otherUserId: string,
+    otherUserName: string,
+    context?: Conversation['context'],
+    currentUserNameOverride?: string
+  ) => Promise<string>;
   sendMessage: (conversationId: string, content: string, imageUrl?: string) => void;
   markAsRead: (conversationId: string) => void;
   getConversationMessages: (conversationId: string) => Message[];
@@ -175,14 +180,20 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getOrCreateConversation = useCallback(async (
     otherUserId: string,
     otherUserName: string,
-    context?: Conversation['context']
+    context?: Conversation['context'],
+    currentUserNameOverride?: string
   ): Promise<string> => {
     if (!currentUser) return '';
+    const currentParticipantName = currentUserNameOverride ?? currentUser.name;
 
     // Fast path: already in local state
     const existing = conversations.find((conv) => {
       const ids = conv.participants.map((p) => p.userId);
-      return ids.includes(currentUser.id) && ids.includes(otherUserId) && ids.length === 2;
+      const sameParticipants = ids.includes(currentUser.id) && ids.includes(otherUserId) && ids.length === 2;
+      const sameContext = context
+        ? conv.context?.type === context.type && conv.context?.itemId === context.itemId
+        : !conv.context;
+      return sameParticipants && sameContext;
     });
     if (existing) return existing.id;
 
@@ -200,7 +211,19 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .eq('user_id', otherUserId)
         .in('conversation_id', myIds);
 
-      if (otherRows?.length) return otherRows[0].conversation_id;
+      if (otherRows?.length) {
+        const sharedIds = otherRows.map((r) => r.conversation_id);
+        const { data: matchingConvs } = await supabase
+          .from('conversations')
+          .select('id, context_type, context_item_id')
+          .in('id', sharedIds);
+        const matching = matchingConvs?.find((conv) => (
+          context
+            ? conv.context_type === context.type && conv.context_item_id === context.itemId
+            : !conv.context_type
+        ));
+        if (matching) return matching.id;
+      }
     }
 
     // Generate the UUID client-side.
@@ -225,7 +248,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const { error: pErr } = await supabase.from('conversation_participants').insert([
-      { conversation_id: newId, user_id: currentUser.id, user_name: currentUser.name },
+      { conversation_id: newId, user_id: currentUser.id, user_name: currentParticipantName },
       { conversation_id: newId, user_id: otherUserId, user_name: otherUserName },
     ]);
 
@@ -239,7 +262,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const conversation: Conversation = {
       id: newId,
       participants: [
-        { userId: currentUser.id, userName: currentUser.name },
+        { userId: currentUser.id, userName: currentParticipantName },
         { userId: otherUserId, userName: otherUserName },
       ],
       unreadCount: 0,
@@ -254,13 +277,16 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ── sendMessage (optimistic) ──────────────────────────────────────────
   const sendMessage = useCallback((conversationId: string, content: string, imageUrl?: string) => {
     if (!currentUser) return;
+    const conversation = conversations.find((conv) => conv.id === conversationId);
+    const senderName =
+      conversation?.participants.find((p) => p.userId === currentUser.id)?.userName ?? currentUser.name;
 
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const optimistic: Message = {
       id: tempId,
       conversationId,
       senderId: currentUser.id,
-      senderName: currentUser.name,
+      senderName,
       content,
       imageUrl,
       timestamp: Date.now(),
@@ -282,9 +308,9 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase
       .from('messages')
       .insert({
-        conversation_id: conversationId,
-        sender_id: currentUser.id,
-        sender_name: currentUser.name,
+      conversation_id: conversationId,
+      sender_id: currentUser.id,
+      sender_name: senderName,
         content,
         image_url: imageUrl ?? null,
         read: false,

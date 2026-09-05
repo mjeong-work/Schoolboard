@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Heart, Eye, BadgeCheck, MessageCircle, MessageSquare, Trash2, MoreHorizontal, MapPin, Navigation, ChevronDown } from 'lucide-react';
+import { Heart, Eye, MessageCircle, MessageSquare, Trash2, MoreHorizontal, MapPin, Navigation, ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useData, type MarketplaceItem } from '../utils/dataContext';
 import { useAuth } from '../utils/authContext';
 import { useChat } from '../utils/chatContext';
+import { getAnonymousName } from '../utils/anonymousName';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -66,7 +67,8 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
       const conversationId = await getOrCreateConversation(
         item.seller.id,
         item.seller.name,
-        { type: 'marketplace', itemId: item.id, itemTitle: item.title }
+        { type: 'marketplace', itemId: item.id, itemTitle: item.title },
+        getAnonymousName(`${item.id}:${user.id}`)
       );
       if (!conversationId) {
         toast.error('Could not start conversation. Please try again.');
@@ -209,7 +211,6 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
           {/* Seller + date */}
           <div className="flex items-center gap-1 mb-1.5">
             <span className="text-[11px] text-[#999] font-[Roboto] truncate">{item.seller.name}</span>
-            {item.seller.verified && <BadgeCheck className="w-3 h-3 text-blue-500 shrink-0" />}
             <span className="text-[#ccc] text-[10px]">·</span>
             <span className="text-[11px] text-[#bbb] shrink-0">{formatDate(item.postedDate)}</span>
           </div>
@@ -306,7 +307,7 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
         onOpenChange={setIsCommentsOpen}
         comments={item.comments}
         currentUserId={user?.id}
-        currentUserName={user?.name}
+        currentUserName={undefined}
         isAdmin={isAdmin}
         onAddComment={handleAddComment}
         onDeleteComment={handleDeleteComment}
