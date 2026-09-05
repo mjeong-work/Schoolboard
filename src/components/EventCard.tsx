@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Heart, MessageCircle, Calendar, Clock, MapPin, Users, CheckCircle, Send, MoreHorizontal, UserPlus } from 'lucide-react';
-import { getAvatarColor, getAnonymousName } from '../utils/anonymousName';
+import { getAvatarColor } from '../utils/anonymousName';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useData, type Event } from '../utils/dataContext';
 import { useAuth } from '../utils/authContext';
@@ -41,24 +41,14 @@ export function EventCard({ event }: EventCardProps) {
   const hasRSVPed = hasUserRSVPed(event.id);
   const isOwnEvent = user?.id === event.authorId;
   const isAdmin = user?.role === 'Administrator';
-  // Past events stay visible and commentable, but regular users cannot modify
-  // the event state after the date has passed.
   const todayStr = new Date().toLocaleDateString('en-CA');
   const isPastEvent = event.date < todayStr;
 
   const handleLike = () => {
-    if (isPastEvent) {
-      toast('Likes are closed for past events.');
-      return;
-    }
     toggleLikeEvent(event.id);
   };
 
   const handleRSVP = () => {
-    if (isPastEvent) {
-      toast('RSVP is closed for past events.');
-      return;
-    }
     toggleRSVPEvent(event.id);
     if (!hasRSVPed) {
       toast.success('RSVP confirmed!');
@@ -68,11 +58,12 @@ export function EventCard({ event }: EventCardProps) {
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
+      year: 'numeric',
       month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
+      day: 'numeric'
     });
   };
 
@@ -105,8 +96,7 @@ export function EventCard({ event }: EventCardProps) {
       const conversationId = await getOrCreateConversation(
         event.authorId,
         event.author,
-        { type: 'event', itemId: event.id, itemTitle: event.title },
-        getAnonymousName(`${event.id}:${user.id}`)
+        { type: 'event', itemId: event.id, itemTitle: event.title }
       );
       if (!conversationId) {
         toast.error('Could not start conversation. Please try again.');
@@ -142,14 +132,8 @@ export function EventCard({ event }: EventCardProps) {
                   <span>Going</span>
                 </div>
               )}
-              {isPastEvent && (
-                <div className="text-xs text-[#666] bg-[#f3f4f6] px-2 py-0.5 rounded-full">
-                  Past event
-                </div>
-              )}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[#999] text-sm font-[Roboto]">{formatDate(event.date)}</span>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="p-1 hover:bg-black/5 rounded-full transition-colors">
@@ -165,7 +149,7 @@ export function EventCard({ event }: EventCardProps) {
                       Edit event
                     </DropdownMenuItem>
                   )}
-                  {((isOwnEvent && !isPastEvent) || isAdmin) && (
+                  {(isOwnEvent || isAdmin) && (
                     <DropdownMenuItem
                       className="cursor-pointer text-red-600 focus:text-red-600"
                       onClick={handleDeleteEvent}
@@ -184,11 +168,11 @@ export function EventCard({ event }: EventCardProps) {
           {/* Event Title */}
           <h3 className="text-[15px] text-[rgb(51,51,51)] mb-2 leading-snug font-[Roboto]">{event.title}</h3>
 
-          {/* Event Details - Compact */}
+          {/* Event Details */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#666] mb-2">
             <div className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" strokeWidth={2} />
-              <span>{event.time}</span>
+              <span>{formatDate(event.date)} {event.time}</span>
             </div>
             <span className="text-[#ddd]">•</span>
             <div className="flex items-center gap-1">
@@ -216,7 +200,7 @@ export function EventCard({ event }: EventCardProps) {
             </div>
           )}
 
-          {/* Map (shown when the event has GPS coordinates) */}
+          {/* Map */}
           {event.locationLat !== undefined && event.locationLng !== undefined && (
             <div className="mb-3">
               <EventLocationMap
@@ -231,23 +215,18 @@ export function EventCard({ event }: EventCardProps) {
 
           {/* Action Buttons Row */}
           <div className="flex items-center gap-1 mb-3">
-            {/* RSVP Button */}
             <button
               onClick={handleRSVP}
-              disabled={isPastEvent}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                isPastEvent
-                  ? 'bg-gray-100 text-[#999] cursor-not-allowed'
-                  : hasRSVPed
+                hasRSVPed
                   ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
                   : 'bg-black text-white hover:bg-black/80'
               }`}
             >
               <UserPlus className="w-4 h-4" strokeWidth={2} />
-              {isPastEvent ? 'Closed' : hasRSVPed ? 'Going' : 'RSVP'}
+              {hasRSVPed ? 'Going' : 'RSVP'}
             </button>
 
-            {/* Contact Host - Only if not own event */}
             {!isOwnEvent && (
               <button
                 onClick={handleContactHost}
@@ -263,10 +242,7 @@ export function EventCard({ event }: EventCardProps) {
           <div className="flex items-center gap-1 -ml-2">
             <button
               onClick={handleLike}
-              disabled={isPastEvent}
-              className={`flex items-center gap-1.5 p-2 rounded-full transition-colors group ${
-                isPastEvent ? 'cursor-not-allowed opacity-50' : 'hover:bg-black/5'
-              }`}
+              className="flex items-center gap-1.5 p-2 hover:bg-black/5 rounded-full transition-colors group"
             >
               <Heart 
                 className={`w-5 h-5 transition-colors ${
@@ -296,14 +272,13 @@ export function EventCard({ event }: EventCardProps) {
         onOpenChange={setShowComments}
         comments={event.comments}
         currentUserId={user?.id}
-        currentUserName={undefined}
+        currentUserName={user?.name}
         isAdmin={isAdmin}
         onAddComment={handleAddComment}
         onDeleteComment={handleDeleteComment}
       />
     </div>
 
-    {/* Edit event dialog — only rendered when the author opens it */}
     {isEditOpen && (
       <EditEventDialog
         open={isEditOpen}
