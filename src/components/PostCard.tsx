@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { Heart, MessageCircle, Send, MoreHorizontal, BadgeCheck } from 'lucide-react';
+import { Heart, MessageCircle, MoreHorizontal, BadgeCheck } from 'lucide-react';
 import { getAvatarColor } from '../utils/anonymousName';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useData, type Post } from '../utils/dataContext';
 import { useAuth } from '../utils/authContext';
-import { useChat } from '../utils/chatContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,7 +28,6 @@ export function PostCard({ post }: PostCardProps) {
     updatePost,
     isPostLiked
   } = useData();
-  const { getOrCreateConversation } = useChat();
 
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -75,16 +73,6 @@ export function PostCard({ post }: PostCardProps) {
       toast.success('Post updated');
     } catch {
       toast.error('Failed to update post');
-    }
-  };
-
-  const handleStartChat = async () => {
-    if (!user || isOwnPost) return;
-    try {
-      await getOrCreateConversation(post.authorId, post.author);
-      window.location.hash = '#messages';
-    } catch (err: any) {
-      toast.error(err?.message || 'Could not start conversation. Please try again.');
     }
   };
 
@@ -197,17 +185,6 @@ export function PostCard({ post }: PostCardProps) {
               <span className="text-sm text-[#999]">{post.comments.length}</span>
             </button>
 
-            {!isOwnPost && (
-              <button
-                onClick={handleStartChat}
-                className="flex items-center gap-1.5 p-2 hover:bg-black/5 rounded-full transition-colors group"
-              >
-                <Send
-                  className="w-5 h-5 text-black/60 group-hover:text-blue-500 transition-colors"
-                  strokeWidth={1.5}
-                />
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -217,7 +194,7 @@ export function PostCard({ post }: PostCardProps) {
         onOpenChange={setIsCommentsOpen}
         comments={post.comments}
         currentUserId={user?.id}
-        currentUserName={user?.name}
+        currentUserName={undefined}
         isAdmin={isAdmin}
         onAddComment={handleAddComment}
         onDeleteComment={handleDeleteComment}

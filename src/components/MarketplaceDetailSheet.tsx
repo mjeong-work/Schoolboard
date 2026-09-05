@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BadgeCheck, MoreHorizontal, Send } from 'lucide-react';
+import { MoreHorizontal, Send } from 'lucide-react';
 import {
   Drawer,
   DrawerContent,
@@ -173,7 +173,6 @@ export function MarketplaceDetailSheet({ open, onOpenChange, item }: Marketplace
             {/* Seller */}
             <div className="flex items-center gap-1 mb-4 text-sm text-[#666]">
               <span>{item.seller.name}</span>
-              {item.seller.verified && <BadgeCheck className="w-3.5 h-3.5 text-blue-500" />}
             </div>
 
             {/* Full description */}
@@ -245,7 +244,7 @@ export function MarketplaceDetailSheet({ open, onOpenChange, item }: Marketplace
               className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0"
               style={{ background: getAvatarColor(user?.id || '') }}
             >
-              {user?.name?.charAt(0) || 'A'}
+              A
             </div>
             <div className="flex-1 flex items-center gap-1 bg-[#f5f5f5] rounded-full pl-4 pr-1.5 h-10">
               <input

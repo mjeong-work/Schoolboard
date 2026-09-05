@@ -16,6 +16,7 @@ import VerificationPendingPage from "./VerificationPendingPage";
 import { MessagesPage } from "./components/MessagesPage";
 import { ChatManager } from "./components/ChatManager";
 import { Toaster } from "./components/ui/sonner";
+import { isSupabaseConfigured } from "./utils/supabaseClient";
 
 type PageType =
   | "community"
@@ -168,6 +169,23 @@ function AppRouter() {
 }
 
 export default function App() {
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center px-6 font-[Roboto]">
+        <div className="max-w-md w-full border border-[#e5e7eb] rounded-lg p-6">
+          <h1 className="text-xl font-semibold text-[#111] mb-2">Supabase setup required</h1>
+          <p className="text-sm text-[#666] leading-relaxed mb-4">
+            Add your Supabase project values to a local .env file, then restart the dev server.
+          </p>
+          <pre className="bg-[#f5f5f5] text-[#111] text-xs rounded-md p-3 overflow-x-auto">
+{`VITE_SUPABASE_URL=your-project-url
+VITE_SUPABASE_ANON_KEY=your-anon-key`}
+          </pre>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <AuthProvider>
       <DataProvider>
