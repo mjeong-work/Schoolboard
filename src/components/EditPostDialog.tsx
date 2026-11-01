@@ -11,6 +11,9 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Upload, X } from 'lucide-react';
+import { toast } from 'sonner@2.0.3';
+import { useAuth } from '../utils/authContext';
+import { uploadImage, validateImageFile, ImageUploadError } from '../utils/imageUpload';
 import type { Post } from '../utils/dataContext';
 
 interface EditPostDialogProps {
@@ -21,37 +24,56 @@ interface EditPostDialogProps {
 }
 
 export function EditPostDialog({ open, onOpenChange, post, onSubmit }: EditPostDialogProps) {
+  const { user } = useAuth();
   const [title, setTitle] = useState(post.title);
   const [category, setCategory] = useState(post.category);
   const [content, setContent] = useState(post.content);
+  // `image` is the URL that will be persisted (an existing hosted URL, or
+  // null once removed); `imageFile`/`previewUrl` track a newly picked photo
+  // that still needs to be compressed and uploaded at submit time.
   const [image, setImage] = useState<string | null>(post.image);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(post.image);
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !content.trim()) return;
+    if (!title.trim() || !content.trim() || isSaving || !user) return;
     setIsSaving(true);
     try {
-      await onSubmit({ title: title.trim(), content: content.trim(), image, category });
+      let finalImage = image;
+      if (imageFile) {
+        finalImage = await uploadImage(imageFile, 'post', user.id);
+      }
+      await onSubmit({ title: title.trim(), content: content.trim(), image: finalImage, category });
       onOpenChange(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save changes. Please try again.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const MAX_IMAGE_BYTES = 1 * 1024 * 1024; // 1 MB
-
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > MAX_IMAGE_BYTES) {
-      alert(`Image must be under 1 MB (selected file is ${(file.size / 1024 / 1024).toFixed(1)} MB).`);
+    try {
+      validateImageFile(file, 'post');
+    } catch (err) {
+      toast.error(err instanceof ImageUploadError ? err.message : 'Could not use that image.');
       e.target.value = '';
       return;
     }
-    const reader = new FileReader();
-    reader.onloadend = () => setImage(reader.result as string);
-    reader.readAsDataURL(file);
+    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+    setImageFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handleRemoveImage = () => {
+    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+    setImage(null);
+    setImageFile(null);
+    setPreviewUrl(null);
   };
 
   return (
@@ -102,11 +124,11 @@ export function EditPostDialog({ open, onOpenChange, post, onSubmit }: EditPostD
 
           <div>
             <Label className="text-[#666] mb-1.5 block">Photo (Optional)</Label>
-            {!image ? (
+            {!previewUrl ? (
               <div className="border-2 border-dashed border-[#e5e7eb] rounded-lg p-5 text-center hover:border-[#0b5fff] transition-colors cursor-pointer">
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
                   onChange={handleImageUpload}
                   className="hidden"
                   id="edit-image-upload"
@@ -117,20 +139,20 @@ export function EditPostDialog({ open, onOpenChange, post, onSubmit }: EditPostD
                       <Upload className="w-5 h-5 text-[#0b5fff]" />
                     </div>
                     <div className="text-sm text-[#666]">Click to upload an image</div>
-                    <div className="text-xs text-[#999]">PNG, JPG, GIF up to 1MB</div>
+                    <div className="text-xs text-[#999]">JPG, PNG, WebP, or GIF up to 10MB</div>
                   </div>
                 </label>
               </div>
             ) : (
               <div className="relative border border-[#e5e7eb] rounded-lg overflow-hidden">
                 <img
-                  src={image}
+                  src={previewUrl}
                   alt="Preview"
                   className="w-full h-auto max-h-[250px] object-cover"
                 />
                 <button
                   type="button"
-                  onClick={() => setImage(null)}
+                  onClick={handleRemoveImage}
                   className="absolute top-2 right-2 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#f9fafb] transition-colors"
                 >
                   <X className="w-4 h-4 text-[#666]" />

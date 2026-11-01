@@ -11,7 +11,10 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Upload, X } from 'lucide-react';
+import { Upload, X, Loader2 } from 'lucide-react';
+import { toast } from 'sonner@2.0.3';
+import { useAuth } from '../utils/authContext';
+import { uploadImage, validateImageFile, ImageUploadError } from '../utils/imageUpload';
 import { LocationAutocomplete, type LocationData } from './LocationAutocomplete';
 import type { Event } from '../utils/dataContext';
 
@@ -43,16 +46,23 @@ interface EditEventDialogProps {
     locationLat?: number;
     locationLng?: number;
     googlePlaceId?: string;
-  }) => void;
+  }) => void | Promise<void>;
 }
 
 export function EditEventDialog({ open, onOpenChange, event, onSubmit }: EditEventDialogProps) {
+  const { user } = useAuth();
   const [title, setTitle] = useState(event.title);
   const [date, setDate] = useState(event.date);
   const [time, setTime] = useState(event.time);
   const [category, setCategory] = useState(event.category || 'Academic');
   const [description, setDescription] = useState(event.description);
+  // `image` is the URL that will be persisted; `imageFile`/`uploadedImage`
+  // track a newly picked photo that still needs to be compressed and
+  // uploaded at submit time (uploadedImage doubles as the preview src).
+  const [image, setImage] = useState<string | null>(event.image || null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(event.image || null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [locationData, setLocationData] = useState<LocationData>({
     // Prefer structured location name; fall back to plain venue text
     displayText: event.locationName || event.venue,
@@ -63,38 +73,61 @@ export function EditEventDialog({ open, onOpenChange, event, onSubmit }: EditEve
     googlePlaceId: event.googlePlaceId,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!title.trim() || !date || !time || !locationData.displayText.trim() || !description.trim()) {
+    if (!title.trim() || !date || !time || !locationData.displayText.trim() || !description.trim() || isSubmitting || !user) {
       return;
     }
 
-    onSubmit({
-      title: title.trim(),
-      date,
-      time,
-      venue: locationData.displayText.trim(),
-      description: description.trim(),
-      image: uploadedImage,
-      category,
-      locationName: locationData.locationName,
-      locationAddress: locationData.locationAddress,
-      locationLat: locationData.locationLat,
-      locationLng: locationData.locationLng,
-      googlePlaceId: locationData.googlePlaceId,
-    });
+    setIsSubmitting(true);
+    try {
+      let finalImage = image;
+      if (imageFile) {
+        finalImage = await uploadImage(imageFile, 'event', user.id);
+      }
+
+      await onSubmit({
+        title: title.trim(),
+        date,
+        time,
+        venue: locationData.displayText.trim(),
+        description: description.trim(),
+        image: finalImage,
+        category,
+        locationName: locationData.locationName,
+        locationAddress: locationData.locationAddress,
+        locationLat: locationData.locationLat,
+        locationLng: locationData.locationLng,
+        googlePlaceId: locationData.googlePlaceId,
+      });
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save changes. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setUploadedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    try {
+      validateImageFile(file, 'event');
+    } catch (err) {
+      toast.error(err instanceof ImageUploadError ? err.message : 'Could not use that image.');
+      e.target.value = '';
+      return;
     }
+    if (uploadedImage?.startsWith('blob:')) URL.revokeObjectURL(uploadedImage);
+    setImageFile(file);
+    setUploadedImage(URL.createObjectURL(file));
+  };
+
+  const handleRemoveImage = () => {
+    if (uploadedImage?.startsWith('blob:')) URL.revokeObjectURL(uploadedImage);
+    setImage(null);
+    setImageFile(null);
+    setUploadedImage(null);
   };
 
   const isSubmitDisabled =
@@ -213,7 +246,7 @@ export function EditEventDialog({ open, onOpenChange, event, onSubmit }: EditEve
               <div className="border-2 border-dashed border-[#e5e7eb] rounded-lg p-5 text-center hover:border-[#0b5fff] transition-colors cursor-pointer">
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
                   onChange={handleImageUpload}
                   className="hidden"
                   id="edit-event-image-upload"
@@ -224,7 +257,7 @@ export function EditEventDialog({ open, onOpenChange, event, onSubmit }: EditEve
                       <Upload className="w-5 h-5 text-[#0b5fff]" />
                     </div>
                     <div className="text-sm text-[#666]">Click to upload an image</div>
-                    <div className="text-xs text-[#999]">PNG, JPG, GIF up to 10MB</div>
+                    <div className="text-xs text-[#999]">JPG, PNG, WebP, or GIF up to 10MB</div>
                   </div>
                 </label>
               </div>
@@ -237,7 +270,7 @@ export function EditEventDialog({ open, onOpenChange, event, onSubmit }: EditEve
                 />
                 <button
                   type="button"
-                  onClick={() => setUploadedImage(null)}
+                  onClick={handleRemoveImage}
                   className="absolute top-2 right-2 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#f9fafb] transition-colors"
                 >
                   <X className="w-4 h-4 text-[#666]" />
@@ -257,9 +290,10 @@ export function EditEventDialog({ open, onOpenChange, event, onSubmit }: EditEve
             </Button>
             <Button
               type="submit"
-              disabled={isSubmitDisabled}
-              className="bg-[#0b5fff] hover:bg-[#0949cc] text-white px-6 py-2 rounded-lg shadow-sm w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSubmitDisabled || isSubmitting}
+              className="bg-[#0b5fff] hover:bg-[#0949cc] text-white px-6 py-2 rounded-lg shadow-sm w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
             >
+              {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Save Changes
             </Button>
           </div>

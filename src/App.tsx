@@ -1,21 +1,35 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { AuthProvider, useAuth } from "./utils/authContext";
 import { DataProvider } from "./utils/dataContext";
 import { ChatProvider } from "./utils/chatContext";
-import CommunityPage from "./CommunityPage";
-import EventsPage from "./EventsPage";
-import MarketplacePage from "./MarketplacePage";
-import ProfilePage from "./ProfilePage";
-import AdminPage from "./AdminPage";
-import EditProfilePage from "./EditProfilePage";
-import RegisterPage from "./RegisterPage";
 import LoginPage from "./LoginPage";
-import ForgotPasswordPage from "./ForgotPasswordPage";
-import ResetPasswordPage from "./ResetPasswordPage";
-import VerificationPendingPage from "./VerificationPendingPage";
-import { MessagesPage } from "./components/MessagesPage";
 import { ChatManager } from "./components/ChatManager";
 import { Toaster } from "./components/ui/sonner";
+
+// Route-level code splitting: everything below is only ever shown after
+// the user lands on a specific page, so none of it needs to be in the
+// initial bundle the browser fetches/parses before login can even render.
+// LoginPage stays a static import since it's the one page rendered
+// synchronously on first load for unauthenticated visitors.
+const CommunityPage = lazy(() => import("./CommunityPage"));
+const EventsPage = lazy(() => import("./EventsPage"));
+const MarketplacePage = lazy(() => import("./MarketplacePage"));
+const ProfilePage = lazy(() => import("./ProfilePage"));
+const AdminPage = lazy(() => import("./AdminPage"));
+const EditProfilePage = lazy(() => import("./EditProfilePage"));
+const RegisterPage = lazy(() => import("./RegisterPage"));
+const ForgotPasswordPage = lazy(() => import("./ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("./ResetPasswordPage"));
+const VerificationPendingPage = lazy(() => import("./VerificationPendingPage"));
+const MessagesPage = lazy(() =>
+  import("./components/MessagesPage").then((m) => ({ default: m.MessagesPage }))
+);
+
+// Minimal, theme-neutral placeholder — shown only for the brief moment a
+// page chunk is fetched, never long enough to need real skeleton UI.
+function PageLoadingFallback() {
+  return <div className="min-h-screen bg-white" />;
+}
 
 type PageType =
   | "community"
@@ -137,31 +151,49 @@ function AppRouter() {
   }
 
   if (currentPage === "register") {
-    return <RegisterPage />;
+    return (
+      <Suspense fallback={<PageLoadingFallback />}>
+        <RegisterPage />
+      </Suspense>
+    );
   }
 
   if (currentPage === "forgot-password") {
-    return <ForgotPasswordPage />;
+    return (
+      <Suspense fallback={<PageLoadingFallback />}>
+        <ForgotPasswordPage />
+      </Suspense>
+    );
   }
 
   if (currentPage === "reset-password") {
-    return <ResetPasswordPage />;
+    return (
+      <Suspense fallback={<PageLoadingFallback />}>
+        <ResetPasswordPage />
+      </Suspense>
+    );
   }
 
   if (currentPage === "verification") {
-    return <VerificationPendingPage />;
+    return (
+      <Suspense fallback={<PageLoadingFallback />}>
+        <VerificationPendingPage />
+      </Suspense>
+    );
   }
 
   // Protected pages (only accessible when authenticated and approved)
   return (
     <>
-      {currentPage === "community" && <CommunityPage />}
-      {currentPage === "events" && <EventsPage />}
-      {currentPage === "marketplace" && <MarketplacePage />}
-      {currentPage === "profile" && <ProfilePage />}
-      {currentPage === "admin" && <AdminPage />}
-      {currentPage === "edit-profile" && <EditProfilePage />}
-      {currentPage === "messages" && <MessagesPage />}
+      <Suspense fallback={<PageLoadingFallback />}>
+        {currentPage === "community" && <CommunityPage />}
+        {currentPage === "events" && <EventsPage />}
+        {currentPage === "marketplace" && <MarketplacePage />}
+        {currentPage === "profile" && <ProfilePage />}
+        {currentPage === "admin" && <AdminPage />}
+        {currentPage === "edit-profile" && <EditProfilePage />}
+        {currentPage === "messages" && <MessagesPage />}
+      </Suspense>
       <ChatManager />
     </>
   );

@@ -1,109 +1,79 @@
 import { useState } from 'react';
-import { Heart, Eye, BadgeCheck, MessageCircle, MessageSquare, Trash2, MoreHorizontal, MapPin, Navigation, ChevronDown } from 'lucide-react';
+import { Heart, Eye, BadgeCheck, MessageCircle, MessageSquare, Trash2, Pencil, MoreHorizontal, ChevronUp, MapPin } from 'lucide-react';
 import { Button } from './ui/button';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { useData, type MarketplaceItem } from '../utils/dataContext';
-import { useAuth } from '../utils/authContext';
-import { useChat } from '../utils/chatContext';
+import { useMarketplaceItemActions } from '../utils/useMarketplaceItemActions';
+import type { MarketplaceItem } from '../utils/dataContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { toast } from 'sonner@2.0.3';
 import { CommentsSheet } from './CommentsSheet';
-import { MarketplaceDetailSheet } from './MarketplaceDetailSheet';
+import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
+import { CommentsPanel } from './CommentsPanel';
+import { MarketplacePostGallery, MarketplacePostBody, useMarketplaceItemView, formatPrice } from './MarketplacePostDetail';
+import { useIsMobile } from './ui/use-mobile';
 
 interface MarketplaceCardProps {
   item: MarketplaceItem;
+  /** Mobile only — opens the full-page post detail for this item. */
+  onOpenDetail?: (itemId: string) => void;
+  /** Opens the create/edit dialog pre-filled with this item. */
+  onEdit?: (item: MarketplaceItem) => void;
 }
 
-export function MarketplaceCard({ item }: MarketplaceCardProps) {
-  const { user } = useAuth();
+// Desktop's single expansion state for "this post" — comments are just
+// one more thing the expanded post can show, not a competing overlay.
+// compact           -> feed row only
+// expanded          -> + full gallery/body inline
+// expanded-comments -> + comments, still part of the same expanded card
+type DesktopView = 'compact' | 'expanded' | 'expanded-comments';
+
+export function MarketplaceCard({ item, onOpenDetail, onEdit }: MarketplaceCardProps) {
   const {
-    toggleSaveItem,
-    deleteMarketplaceItem,
-    isItemSaved,
-    addCommentToMarketplaceItem,
-    deleteCommentFromMarketplaceItem,
-  } = useData();
-  const { getOrCreateConversation, getConversationCountForItem } = useChat();
+    user,
+    isSaved,
+    isOwnItem,
+    isAdmin,
+    conversationCount,
+    handleSave,
+    handleContactSeller,
+    handleDeleteItem,
+    handleAddComment,
+    handleDeleteComment,
+  } = useMarketplaceItemActions(item);
+  const isMobile = useIsMobile();
 
-  const [showMap, setShowMap] = useState(false);
-  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const isSaved = isItemSaved(item.id);
-  const isOwnItem = user?.id === item.seller.id;
-  const isAdmin = user?.role === 'Administrator';
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false); // mobile bottom sheet only
+  const [desktopView, setDesktopView] = useState<DesktopView>('compact');
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
-  // Mock trade locations — cycled by item id hash
-  const TRADE_SPOTS = [
-    { name: 'Student Union Building', address: '123 Campus Drive, University Park, PA 16802' },
-    { name: 'Main Library Entrance', address: '220 Library Lane, University Park, PA 16802' },
-    { name: 'Recreation Center Lobby', address: '1 Recreation Way, University Park, PA 16802' },
-    { name: 'Engineering Hall Atrium', address: '112 Engineering Ave, University Park, PA 16802' },
-    { name: 'Business School Lobby', address: '303 Commerce St, University Park, PA 16802' },
-    { name: 'Campus Coffee House', address: '45 Campus Blvd, University Park, PA 16802' },
-  ];
-  const tradeSpot = TRADE_SPOTS[parseInt(item.id, 10) % TRADE_SPOTS.length] ?? TRADE_SPOTS[0];
+  // Expanding the post on desktop is a genuine "view", same as opening
+  // the mobile full-page detail.
+  useMarketplaceItemView(item.id, !isMobile && desktopView !== 'compact');
 
-  // Views are no longer counted just for being in the feed — see
-  // MarketplaceDetailSheet, which increments on genuine detail-view open.
-
-  const handleSave = async () => {
-    try {
-      await toggleSaveItem(item.id);
-      toast.success(isSaved ? 'Item unsaved' : 'Item saved');
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to update save');
+  // Mobile: leave the feed for the full-page detail. Desktop: toggle this
+  // exact card between compact and expanded in place.
+  const handleOpenPost = () => {
+    if (isMobile) {
+      onOpenDetail?.(item.id);
+      return;
     }
+    setDesktopView((v) => (v === 'compact' ? 'expanded' : 'compact'));
   };
 
-  const handleContactSeller = async () => {
-    if (!user || isOwnItem) return;
-    try {
-      const conversationId = await getOrCreateConversation(
-        item.seller.id,
-        item.seller.name,
-        { type: 'marketplace', itemId: item.id, itemTitle: item.title }
-      );
-      if (!conversationId) {
-        toast.error('Could not start conversation. Please try again.');
-        return;
-      }
-      window.dispatchEvent(new CustomEvent('openChat', { detail: { conversationId } }));
-    } catch (err: any) {
-      console.error('[handleContactSeller]', err);
-      toast.error(err?.message || 'Failed to start conversation. Please try again.');
+  // Mobile: unchanged bottom sheet. Desktop: comments are part of the
+  // expanded post — opening them expands the post too if it wasn't
+  // already, and closing them just drops back to "expanded" rather than
+  // collapsing the whole card.
+  const handleToggleComments = () => {
+    if (isMobile) {
+      setIsCommentsOpen((v) => !v);
+      return;
     }
-  };
-
-  const handleDeleteItem = async () => {
-    try {
-      await deleteMarketplaceItem(item.id);
-      toast.success('Item deleted');
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to delete item');
-    }
-  };
-
-  const handleAddComment = async (text: string) => {
-    try {
-      await addCommentToMarketplaceItem(item.id, text);
-      toast.success('Comment added');
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to add comment');
-    }
-  };
-
-  const handleDeleteComment = async (commentId: string) => {
-    try {
-      await deleteCommentFromMarketplaceItem(item.id, commentId);
-      toast.success('Comment deleted');
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to delete comment');
-    }
+    setDesktopView((v) => (v === 'expanded-comments' ? 'expanded' : 'expanded-comments'));
   };
 
   const formatDate = (dateString: string) => {
@@ -136,16 +106,19 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
     }
   };
 
+  const isDesktopExpanded = !isMobile && desktopView !== 'compact';
+
   return (
     <article className="border-b border-[#f0f0f0] px-3 md:px-4 py-3 md:py-4 hover:bg-[#fafafa] transition-colors">
       <div className="flex gap-3 items-start">
 
         {/* Left: Fixed square thumbnail — always just the cover photo
-            (images[0]); the rest only show up in the detail view. */}
+            (images[0]). On mobile this opens the full-page detail; on
+            desktop it expands this card in place. */}
         <button
           type="button"
-          onClick={() => setIsDetailOpen(true)}
-          aria-label={`View details for ${item.title}`}
+          onClick={handleOpenPost}
+          aria-label={isDesktopExpanded ? `Collapse ${item.title}` : `View details for ${item.title}`}
           className="relative shrink-0 w-[88px] h-[88px] rounded-xl overflow-hidden border border-[#f0f0f0] bg-[#f5f5f5]"
         >
           {item.images[0] ? (
@@ -173,20 +146,36 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
 
           {/* Top row: title + menu */}
           <div className="flex items-start justify-between gap-1 mb-0.5">
-            <h3 className="text-[14px] font-semibold text-black leading-snug font-[Roboto] line-clamp-2">
+            <h3
+              onClick={handleOpenPost}
+              className="text-[14px] font-semibold text-black leading-snug font-[Roboto] line-clamp-2 cursor-pointer"
+            >
               {item.title}
             </h3>
             {(isOwnItem || isAdmin) && (
-              <DropdownMenu>
+              <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                  <button className="text-[#999] hover:text-black p-1 rounded-full hover:bg-black/5 transition-colors shrink-0 -mt-0.5">
+                  <button
+                    aria-label="Listing options"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[#999] hover:text-black p-1 rounded-full hover:bg-black/5 transition-colors shrink-0 -mt-0.5"
+                  >
                     <MoreHorizontal className="w-4 h-4" strokeWidth={1.5} />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
+                  {isOwnItem && (
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={(e) => { e.stopPropagation(); onEdit?.(item); }}
+                    >
+                      <Pencil className="w-4 h-4 mr-2" />
+                      Edit item
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
                     className="cursor-pointer text-red-600 focus:text-red-600"
-                    onClick={handleDeleteItem}
+                    onClick={() => setIsDeleteConfirmOpen(true)}
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
                     Delete item
@@ -198,7 +187,7 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
 
           {/* Price + condition + category */}
           <div className="flex items-center gap-1.5 flex-wrap mb-1">
-            <span className="text-[15px] font-bold text-black font-[Roboto]">${item.price}</span>
+            <span className="text-[15px] font-bold text-black font-[Roboto]">{formatPrice(item.price)}</span>
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${getConditionBadgeColor(item.condition)}`}>
               {item.condition}
             </span>
@@ -207,60 +196,30 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
           </div>
 
           {/* Seller + date */}
-          <div className="flex items-center gap-1 mb-1.5">
+          <div className={`flex items-center gap-1 ${item.locationName ? 'mb-1' : 'mb-2'}`}>
             <span className="text-[11px] text-[#999] font-[Roboto] truncate">{item.seller.name}</span>
             {item.seller.verified && <BadgeCheck className="w-3 h-3 text-blue-500 shrink-0" />}
             <span className="text-[#ccc] text-[10px]">·</span>
             <span className="text-[11px] text-[#bbb] shrink-0">{formatDate(item.postedDate)}</span>
           </div>
 
-          {/* Trade location toggle */}
-          <button
-            onClick={() => setShowMap(v => !v)}
-            className="flex items-center gap-1 mb-2 text-[#6366f1] hover:text-[#4f46e5] transition-colors"
-          >
-            <MapPin className="w-3 h-3" strokeWidth={2} />
-            <span className="text-[11px] font-medium truncate max-w-[180px]">{tradeSpot.name}</span>
-            <ChevronDown className={`w-3 h-3 transition-transform ${showMap ? 'rotate-180' : ''}`} strokeWidth={2} />
-          </button>
-
-          {/* Expandable map preview */}
-          {showMap && (
-            <div className="mb-2 rounded-xl overflow-hidden border border-[#e5e7eb] shadow-sm">
-              <div
-                className="relative w-full h-[110px] bg-[#eef0f3]"
-                style={{
-                  backgroundImage: `
-                    repeating-linear-gradient(0deg, transparent, transparent 29px, #dde0e6 30px),
-                    repeating-linear-gradient(90deg, transparent, transparent 59px, #dde0e6 60px)
-                  `,
-                }}
-              >
-                <div className="absolute inset-0 pointer-events-none">
-                  <div className="absolute top-1/2 left-0 right-0 h-[3px] bg-white opacity-80" />
-                  <div className="absolute left-1/3 top-0 bottom-0 w-[3px] bg-white opacity-80" />
-                  <div className="absolute left-2/3 top-0 bottom-0 w-[2px] bg-white opacity-50" />
-                  <div className="absolute top-1/4 left-0 right-0 h-[2px] bg-white opacity-40" />
-                </div>
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full flex flex-col items-center">
-                  <div className="w-7 h-7 rounded-full bg-[#6366f1] flex items-center justify-center shadow-lg border-2 border-white">
-                    <MapPin className="w-3.5 h-3.5 text-white" />
-                  </div>
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#6366f1] mt-[-1px]" />
-                </div>
-              </div>
-              <div className="px-3 py-1.5 bg-white flex items-center gap-2">
-                <Navigation className="w-3 h-3 text-[#6366f1] shrink-0" />
-                <p className="text-[11px] text-[#555] truncate">{tradeSpot.address}</p>
-              </div>
-            </div>
+          {/* Real meetup spot, if the seller set one — tap to see the map
+              in the full post (no fabricated location shown otherwise). */}
+          {item.locationName && (
+            <button
+              onClick={handleOpenPost}
+              className="flex items-center gap-1 mb-2 text-[#6366f1] hover:text-[#4f46e5] transition-colors"
+            >
+              <MapPin className="w-3 h-3" strokeWidth={2} />
+              <span className="text-[11px] font-medium truncate max-w-[220px]">{item.locationName}</span>
+            </button>
           )}
 
           {/* Stats + action */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 text-[#aaa]">
               <button
-                onClick={handleSave}
+                onClick={(e) => { e.stopPropagation(); handleSave(); }}
                 className="flex items-center gap-1 hover:text-red-500 transition-colors group"
               >
                 <Heart
@@ -277,11 +236,11 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
               </div>
               <div className="flex items-center gap-1" title="People who contacted the seller">
                 <MessageCircle className="w-3.5 h-3.5" strokeWidth={1.5} />
-                <span className="text-[11px]">{getConversationCountForItem(item.id, 'marketplace')}</span>
+                <span className="text-[11px]">{conversationCount}</span>
               </div>
               <button
-                onClick={() => setIsCommentsOpen(true)}
-                className="flex items-center gap-1 hover:text-black transition-colors"
+                onClick={(e) => { e.stopPropagation(); handleToggleComments(); }}
+                className={`flex items-center gap-1 transition-colors ${desktopView === 'expanded-comments' && !isMobile ? 'text-black' : 'hover:text-black'}`}
                 title="Comments"
               >
                 <MessageSquare className="w-3.5 h-3.5" strokeWidth={1.5} />
@@ -291,7 +250,7 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
 
             {!isOwnItem && (
               <Button
-                onClick={handleContactSeller}
+                onClick={(e) => { e.stopPropagation(); handleContactSeller(); }}
                 className="bg-black hover:bg-black/80 text-white px-3 h-7 rounded-full text-xs font-[Roboto]"
               >
                 Contact
@@ -301,22 +260,65 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
         </div>
       </div>
 
-      <CommentsSheet
-        open={isCommentsOpen}
-        onOpenChange={setIsCommentsOpen}
-        comments={item.comments}
-        currentUserId={user?.id}
-        currentUserName={user?.name}
-        isAdmin={isAdmin}
-        onAddComment={handleAddComment}
-        onDeleteComment={handleDeleteComment}
+      {/* Desktop: clicking the post expands it in place — full gallery,
+          full body, and (optionally) comments — instead of opening a
+          modal, drawer, or separate page. */}
+      {isDesktopExpanded && (
+        <div className="mt-3 pt-3 border-t border-[#f0f0f0] animate-in fade-in slide-in-from-top-1 duration-200">
+          <MarketplacePostGallery images={item.images} title={item.title} />
+          <div className="mt-3">
+            <MarketplacePostBody item={item} />
+          </div>
+
+          <div className="mt-2 flex justify-end">
+            <button
+              onClick={handleOpenPost}
+              className="flex items-center gap-1 text-xs font-medium text-[#666] hover:text-black hover:bg-black/5 rounded-full px-2 py-1 transition-colors"
+            >
+              Show less
+              <ChevronUp className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {desktopView === 'expanded-comments' && (
+            <div className="mt-1 pt-3 border-t border-[#f0f0f0]">
+              <CommentsPanel
+                variant="inline"
+                comments={item.comments}
+                currentUserId={user?.id}
+                currentUserName={user?.name}
+                isAdmin={isAdmin}
+                onAddComment={handleAddComment}
+                onDeleteComment={handleDeleteComment}
+                onClose={() => setDesktopView('expanded')}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      <ConfirmDeleteDialog
+        open={isDeleteConfirmOpen}
+        onOpenChange={setIsDeleteConfirmOpen}
+        title="Delete this listing?"
+        onConfirm={handleDeleteItem}
       />
 
-      <MarketplaceDetailSheet
-        open={isDetailOpen}
-        onOpenChange={setIsDetailOpen}
-        item={item}
-      />
+      {/* Mobile: comments still slide up as a bottom sheet — this is a
+          deliberately-kept mobile pattern, unrelated to the post-detail
+          bottom sheet that was removed. */}
+      {isMobile && (
+        <CommentsSheet
+          open={isCommentsOpen}
+          onOpenChange={setIsCommentsOpen}
+          comments={item.comments}
+          currentUserId={user?.id}
+          currentUserName={user?.name}
+          isAdmin={isAdmin}
+          onAddComment={handleAddComment}
+          onDeleteComment={handleDeleteComment}
+        />
+      )}
     </article>
   );
 }

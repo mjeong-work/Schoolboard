@@ -2,33 +2,43 @@ import { Search, X } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { NavigationBar } from './components/NavigationBar';
 import { MarketplaceCard } from './components/MarketplaceCard';
+import { MarketplacePostDetailPage } from './components/MarketplacePostDetailPage';
 import { FloatingActionButton } from './components/FloatingActionButton';
 import { CreateMarketplaceDialog } from './components/CreateMarketplaceDialog';
 import { Button } from './components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
 import { toast } from 'sonner@2.0.3';
-import { useData } from './utils/dataContext';
+import { useData, type MarketplaceItem } from './utils/dataContext';
 import { useAuth } from './utils/authContext';
 import { MARKETPLACE_CATEGORIES } from './utils/marketplaceCategories';
 
 export default function MarketplacePage() {
   const { user } = useAuth();
-  const { marketplaceItems, addMarketplaceItem } = useData();
+  const { marketplaceItems, isLoading, loadError, retryLoad, addMarketplaceItem, updateMarketplaceItem } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTab, setSelectedTab] = useState('all');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [sortBy, setSortBy] = useState<'latest' | 'nearest'>('latest');
+  const [editingItem, setEditingItem] = useState<MarketplaceItem | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  // Mobile only — which post (if any) is showing as a full-page detail
+  // view over the feed. The feed stays mounted underneath, so closing
+  // this just reveals it again at whatever scroll position it was at.
+  const [mobileDetailItemId, setMobileDetailItemId] = useState<string | null>(null);
 
-  // Deterministic mock coords per item for geo sort
-  const mockDist = (id: string) => {
-    const seed = parseInt(id, 10) || id.charCodeAt(0);
-    const dlat = ((seed * 7) % 20 - 10) * 0.001;
-    const dlng = ((seed * 13) % 20 - 10) * 0.001;
-    return Math.sqrt(dlat * dlat + dlng * dlng);
+  const isDialogOpen = isCreateDialogOpen || !!editingItem;
+
+  const closeListingDialog = (open: boolean) => {
+    if (!open) {
+      setIsCreateDialogOpen(false);
+      setEditingItem(null);
+    }
   };
 
+  // Not wrapped in try/catch here on purpose — CreateMarketplaceDialog
+  // awaits this and needs the rejection to reach it so it can keep the
+  // dialog open (with the user's input intact) instead of closing
+  // immediately regardless of whether the save actually succeeded.
   const handleCreateListing = async (newListing: {
     title: string;
     category: string;
@@ -36,26 +46,48 @@ export default function MarketplacePage() {
     condition: string;
     description: string;
     images: string[];
+    locationName?: string;
+    locationAddress?: string;
+    locationLat?: number;
+    locationLng?: number;
+    googlePlaceId?: string;
   }) => {
-    try {
-      await addMarketplaceItem({
-        title: newListing.title,
-        category: newListing.category,
-        price: newListing.price,
-        condition: newListing.condition,
-        description: newListing.description,
-        images: newListing.images,
-        seller: {
-          name: user?.name || 'Anonymous Student',
-          contact: '',
-          verified: user?.verified || false,
-        },
-      });
-      toast.success('Listing created successfully!');
-    } catch (err: any) {
-      console.error('[handleCreateListing]', err);
-      toast.error(err?.message || 'Failed to create listing. Please try again.');
-    }
+    await addMarketplaceItem({
+      title: newListing.title,
+      category: newListing.category,
+      price: newListing.price,
+      condition: newListing.condition,
+      description: newListing.description,
+      images: newListing.images,
+      locationName: newListing.locationName,
+      locationAddress: newListing.locationAddress,
+      locationLat: newListing.locationLat,
+      locationLng: newListing.locationLng,
+      googlePlaceId: newListing.googlePlaceId,
+      seller: {
+        name: user?.name || 'Anonymous Student',
+        contact: '',
+        verified: user?.verified || false,
+      },
+    });
+    toast.success('Listing created successfully!');
+  };
+
+  const handleEditListing = async (itemId: string, updates: {
+    title: string;
+    category: string;
+    price: number;
+    condition: string;
+    description: string;
+    images: string[];
+    locationName?: string;
+    locationAddress?: string;
+    locationLat?: number;
+    locationLng?: number;
+    googlePlaceId?: string;
+  }) => {
+    await updateMarketplaceItem(itemId, updates);
+    toast.success('Listing updated!');
   };
 
   // Filter and search logic
@@ -84,20 +116,15 @@ export default function MarketplacePage() {
       result = result.filter((item) => item.savedBy.includes(user?.id || ''));
     }
 
-    // Sort
-    if (sortBy === 'nearest') {
-      result.sort((a, b) => mockDist(a.id) - mockDist(b.id));
-    } else {
-      result.sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime());
-    }
+    result.sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime());
 
     return result;
-  }, [marketplaceItems, searchQuery, selectedCategory, selectedTab, sortBy, user?.id]);
+  }, [marketplaceItems, searchQuery, selectedCategory, selectedTab, user?.id]);
 
   return (
     <div className="min-h-screen bg-white">
       <NavigationBar activeTab="marketplace" />
-      
+
       {/* Utility bar — page title now lives in NavigationBar; this row is
           just search controls so it doesn't duplicate that title. */}
       <div className="sticky top-14 bg-white/95 backdrop-blur-sm z-10">
@@ -117,7 +144,7 @@ export default function MarketplacePage() {
                     className="flex-1 bg-transparent outline-none text-black placeholder:text-[#999] text-sm"
                   />
                 </div>
-                <button 
+                <button
                   onClick={() => {
                     setIsSearchOpen(false);
                     setSearchQuery('');
@@ -145,20 +172,6 @@ export default function MarketplacePage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                   </svg>
                 </div>
-                {/* Sort toggle */}
-                <div className="flex items-center bg-[#f3f4f6] rounded-lg p-0.5 gap-0.5">
-                  {(['latest', 'nearest'] as const).map(v => (
-                    <button
-                      key={v}
-                      onClick={() => setSortBy(v)}
-                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                        sortBy === v ? 'bg-white text-black shadow-sm' : 'text-[#666] hover:text-black'
-                      }`}
-                    >
-                      {v === 'latest' ? 'Latest' : 'Nearest'}
-                    </button>
-                  ))}
-                </div>
                 <button
                   onClick={() => setIsSearchOpen(true)}
                   className="p-2 hover:bg-black/5 rounded-full transition-colors"
@@ -181,14 +194,14 @@ export default function MarketplacePage() {
           {/* Tabs */}
           <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
             <TabsList className="w-full bg-transparent border-0 p-0 h-auto justify-start gap-8">
-              <TabsTrigger 
-                value="all" 
+              <TabsTrigger
+                value="all"
                 className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none"
               >
                 All Items
               </TabsTrigger>
-              <TabsTrigger 
-                value="interested" 
+              <TabsTrigger
+                value="interested"
                 className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none"
               >
                 Interested
@@ -200,10 +213,29 @@ export default function MarketplacePage() {
 
       {/* Items Feed - Threads Style */}
       <main className="max-w-[640px] mx-auto">
-        {filteredItems.length > 0 ? (
+        {isLoading ? (
+          <div className="text-center py-16 px-4">
+            <p className="text-[#999] text-sm">Loading listings…</p>
+          </div>
+        ) : loadError && marketplaceItems.length === 0 ? (
+          <div className="text-center py-16 px-4">
+            <p className="text-[#999] text-sm mb-3">Couldn't load listings.</p>
+            <Button
+              onClick={() => retryLoad()}
+              className="bg-black text-white hover:bg-black/90 rounded-full px-4 h-8 text-sm font-[Roboto]"
+            >
+              Try again
+            </Button>
+          </div>
+        ) : filteredItems.length > 0 ? (
           <div>
             {filteredItems.map((item) => (
-              <MarketplaceCard key={item.id} item={item} />
+              <MarketplaceCard
+                key={item.id}
+                item={item}
+                onOpenDetail={setMobileDetailItemId}
+                onEdit={setEditingItem}
+              />
             ))}
           </div>
         ) : (
@@ -218,15 +250,28 @@ export default function MarketplacePage() {
         )}
       </main>
 
-      {/* Create Listing Dialog */}
-      <CreateMarketplaceDialog 
-        open={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
+      {/* Create / Edit Listing Dialog — one dialog instance shared by both,
+          switching to edit mode whenever editingItem is set. */}
+      <CreateMarketplaceDialog
+        open={isDialogOpen}
+        onOpenChange={closeListingDialog}
         onSubmit={handleCreateListing}
+        editItem={editingItem}
+        onSubmitEdit={handleEditListing}
       />
 
       {/* Mobile Floating Action Button */}
       <FloatingActionButton onClick={() => setIsCreateDialogOpen(true)} />
+
+      {/* Mobile full-page post detail — looked up from the unfiltered list
+          so it stays open even if a search/filter change would otherwise
+          hide it from the feed. */}
+      {mobileDetailItemId && (() => {
+        const detailItem = marketplaceItems.find((i) => i.id === mobileDetailItemId);
+        return detailItem ? (
+          <MarketplacePostDetailPage item={detailItem} onBack={() => setMobileDetailItemId(null)} onEdit={setEditingItem} />
+        ) : null;
+      })()}
     </div>
   );
 }

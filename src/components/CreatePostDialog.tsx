@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog@1.1.6';
-import { X, Clock, Image as ImageIcon, Calendar as CalendarIcon, MoreHorizontal, ChevronDown } from 'lucide-react';
+import { X, Clock, Image as ImageIcon, Calendar as CalendarIcon, MoreHorizontal, ChevronDown, Loader2 } from 'lucide-react';
 import { getAvatarColor } from '../utils/anonymousName';
 import { useAuth } from '../utils/authContext';
+import { uploadImage, validateImageFile, ImageUploadError } from '../utils/imageUpload';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +20,7 @@ interface CreatePostDialogProps {
     category: string;
     content: string;
     image?: string;
-  }) => void;
+  }) => void | Promise<void>;
 }
 
 // The "Anyone" pill in the header is a restyled version of the existing
@@ -31,20 +32,26 @@ const AUDIENCE_OPTIONS = [
   { value: 'alumni', label: 'Alumni' },
 ];
 
-const MAX_IMAGE_BYTES = 1 * 1024 * 1024; // 1 MB
-
 export function CreatePostDialog({ open, onOpenChange, onSubmit }: CreatePostDialogProps) {
   const { user } = useAuth();
   const [audience, setAudience] = useState('all-school');
   const [content, setContent] = useState('');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Hosted URL for imageFile once it's been uploaded, so retrying after a
+  // failed post doesn't upload (and orphan) the same photo again.
+  const uploadedUrlRef = useRef<{ file: File; url: string } | null>(null);
 
   const resetForm = () => {
+    if (uploadedImage?.startsWith('blob:')) URL.revokeObjectURL(uploadedImage);
     setAudience('all-school');
     setContent('');
     setUploadedImage(null);
+    setImageFile(null);
+    uploadedUrlRef.current = null;
   };
 
   const closeAndReset = (next: boolean) => {
@@ -52,32 +59,49 @@ export function CreatePostDialog({ open, onOpenChange, onSubmit }: CreatePostDia
     onOpenChange(next);
   };
 
-  const handleSubmit = () => {
-    if (!content.trim()) return;
-    // No dedicated title field anymore — the post IS the content, matching
-    // how the backend's required "title" column was always redundant with
-    // content for this style of post. PostCard only renders a separate
-    // title line when it differs from the content, so this stays invisible.
-    onSubmit({
-      title: content.trim(),
-      category: audience,
-      content: content.trim(),
-      image: uploadedImage || undefined,
-    });
-    closeAndReset(false);
+  const handleSubmit = async () => {
+    if (!content.trim() || isSubmitting || !user) return;
+    setIsSubmitting(true);
+    try {
+      let imageUrl: string | undefined;
+      if (imageFile) {
+        if (uploadedUrlRef.current?.file !== imageFile) {
+          uploadedUrlRef.current = { file: imageFile, url: await uploadImage(imageFile, 'post', user.id) };
+        }
+        imageUrl = uploadedUrlRef.current.url;
+      }
+
+      // No dedicated title field anymore — the post IS the content, matching
+      // how the backend's required "title" column was always redundant with
+      // content for this style of post. PostCard only renders a separate
+      // title line when it differs from the content, so this stays invisible.
+      await onSubmit({
+        title: content.trim(),
+        category: audience,
+        content: content.trim(),
+        image: imageUrl,
+      });
+      closeAndReset(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to create post. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > MAX_IMAGE_BYTES) {
-      toast.error(`Image must be under 1 MB (selected file is ${(file.size / 1024 / 1024).toFixed(1)} MB).`);
+    try {
+      validateImageFile(file, 'post');
+    } catch (err) {
+      toast.error(err instanceof ImageUploadError ? err.message : 'Could not use that image.');
       e.target.value = '';
       return;
     }
-    const reader = new FileReader();
-    reader.onloadend = () => setUploadedImage(reader.result as string);
-    reader.readAsDataURL(file);
+    if (uploadedImage?.startsWith('blob:')) URL.revokeObjectURL(uploadedImage);
+    setImageFile(file);
+    setUploadedImage(URL.createObjectURL(file));
   };
 
   const audienceLabel = AUDIENCE_OPTIONS.find((o) => o.value === audience)?.label ?? 'Anyone';
@@ -138,9 +162,10 @@ export function CreatePostDialog({ open, onOpenChange, onSubmit }: CreatePostDia
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!content.trim()}
-                className="bg-black text-white rounded-full px-4 h-8 text-sm font-semibold disabled:bg-[#e5e7eb] disabled:text-[#999] transition-colors"
+                disabled={!content.trim() || isSubmitting}
+                className="bg-black text-white rounded-full px-4 h-8 text-sm font-semibold disabled:bg-[#e5e7eb] disabled:text-[#999] transition-colors flex items-center gap-1.5"
               >
+                {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 Post
               </button>
             </div>
@@ -165,7 +190,11 @@ export function CreatePostDialog({ open, onOpenChange, onSubmit }: CreatePostDia
                 />
                 <button
                   type="button"
-                  onClick={() => setUploadedImage(null)}
+                  onClick={() => {
+                    if (uploadedImage.startsWith('blob:')) URL.revokeObjectURL(uploadedImage);
+                    setUploadedImage(null);
+                    setImageFile(null);
+                  }}
                   className="absolute top-2 right-2 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center transition-colors"
                 >
                   <X className="w-4 h-4 text-white" />
@@ -179,7 +208,7 @@ export function CreatePostDialog({ open, onOpenChange, onSubmit }: CreatePostDia
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,image/gif"
               className="hidden"
               onChange={handleImageUpload}
             />
