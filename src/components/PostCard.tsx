@@ -14,6 +14,7 @@ import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { toast } from 'sonner@2.0.3';
 import { EditPostDialog } from './EditPostDialog';
 import { CommentsSheet } from './CommentsSheet';
+import { ReportPostDialog } from './ReportPostDialog';
 
 interface PostCardProps {
   post: Post;
@@ -34,6 +35,7 @@ export function PostCard({ post }: PostCardProps) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   const isLiked = isPostLiked(post.id);
   const isOwnPost = user?.id === post.authorId;
@@ -144,9 +146,12 @@ export function PostCard({ post }: PostCardProps) {
                       Delete post
                     </DropdownMenuItem>
                   )}
-                  {/* Reporting is specced but not built yet — say so rather than
-                      silently doing nothing (see Week 1 reporting spec). */}
-                  <DropdownMenuItem className="cursor-pointer" onClick={() => toast("Reporting isn't available yet.")}>Report post</DropdownMenuItem>
+                  {/* Your own post can't be reported (the server rejects it too). */}
+                  {user && !isOwnPost && (
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => setIsReportOpen(true)}>
+                      Report post
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem className="cursor-pointer" onClick={() => toast("Sharing isn't available yet.")}>Share post</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -219,6 +224,14 @@ export function PostCard({ post }: PostCardProps) {
         title="Delete this post?"
         onConfirm={handleDeletePost}
       />
+
+      {isReportOpen && (
+        <ReportPostDialog
+          open={isReportOpen}
+          onOpenChange={setIsReportOpen}
+          postId={post.id}
+        />
+      )}
 
       {isEditOpen && (
         <EditPostDialog

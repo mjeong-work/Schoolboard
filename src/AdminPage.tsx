@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from './components/ui/avatar';
 import { getPendingUsers, approveUser, rejectUser } from './utils/authContext';
 import { supabase } from './utils/supabaseClient';
 import { toast } from 'sonner@2.0.3';
+import { AdminReportsPanel } from './components/AdminReportsPanel';
 import {
   Users,
   MessageSquare,
@@ -22,6 +23,7 @@ import {
   Tag,
   DollarSign,
   Eye,
+  Flag,
 } from 'lucide-react';
 
 interface Stats {
@@ -40,6 +42,7 @@ export default function AdminPage() {
   const [allListings, setAllListings] = useState<any[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; type: 'post' | 'listing' } | null>(null);
   const [revealedAuthors, setRevealedAuthors] = useState<Record<string, string>>({});
+  const [pendingReports, setPendingReports] = useState<number | null>(null);
 
   useEffect(() => {
     Promise.all([loadPendingUsers(), loadStats(), loadAllPosts(), loadAllListings()]).finally(() => setLoading(false));
@@ -182,7 +185,7 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full bg-transparent border-0 p-0 h-auto justify-start gap-8 mb-6 border-b border-[#f0f0f0]">
+          <TabsList className="w-full bg-transparent border-0 p-0 h-auto justify-start gap-8 mb-6 border-b border-[#f0f0f0] overflow-x-auto overflow-y-hidden">
             <TabsTrigger
               value="approvals"
               className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
@@ -203,6 +206,13 @@ export default function AdminPage() {
             >
               <ShoppingBag className="w-4 h-4" />
               Listings ({stats.listings})
+            </TabsTrigger>
+            <TabsTrigger
+              value="reports"
+              className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
+            >
+              <Flag className="w-4 h-4" />
+              Reports{pendingReports ? ` (${pendingReports})` : ''}
             </TabsTrigger>
           </TabsList>
 
@@ -391,6 +401,12 @@ export default function AdminPage() {
                 ))}
               </div>
             )}
+          </TabsContent>
+          <TabsContent value="reports">
+            <AdminReportsPanel
+              onPendingCountChange={setPendingReports}
+              onContentChanged={() => { loadAllPosts(); loadStats(); }}
+            />
           </TabsContent>
         </Tabs>
       </main>
