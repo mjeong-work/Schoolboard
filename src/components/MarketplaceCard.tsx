@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Heart, Eye, BadgeCheck, MessageCircle, MessageSquare, Trash2, Pencil, MoreHorizontal, ChevronUp, MapPin } from 'lucide-react';
+import { Heart, Eye, MessageCircle, MessageSquare, Trash2, Pencil, MoreHorizontal, ChevronUp, MapPin } from 'lucide-react';
 import { Button } from './ui/button';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useMarketplaceItemActions } from '../utils/useMarketplaceItemActions';
@@ -198,7 +198,6 @@ export function MarketplaceCard({ item, onOpenDetail, onEdit }: MarketplaceCardP
           {/* Seller + date */}
           <div className={`flex items-center gap-1 ${item.locationName ? 'mb-1' : 'mb-2'}`}>
             <span className="text-[11px] text-[#999] font-[Roboto] truncate">{item.seller.name}</span>
-            {item.seller.verified && <BadgeCheck className="w-3 h-3 text-blue-500 shrink-0" />}
             <span className="text-[#ccc] text-[10px]">·</span>
             <span className="text-[11px] text-[#bbb] shrink-0">{formatDate(item.postedDate)}</span>
           </div>
@@ -286,7 +285,7 @@ export function MarketplaceCard({ item, onOpenDetail, onEdit }: MarketplaceCardP
                 variant="inline"
                 comments={item.comments}
                 currentUserId={user?.id}
-                currentUserName={user?.name}
+                currentUserName={undefined}
                 isAdmin={isAdmin}
                 onAddComment={handleAddComment}
                 onDeleteComment={handleDeleteComment}
@@ -313,7 +312,7 @@ export function MarketplaceCard({ item, onOpenDetail, onEdit }: MarketplaceCardP
           onOpenChange={setIsCommentsOpen}
           comments={item.comments}
           currentUserId={user?.id}
-          currentUserName={user?.name}
+          currentUserName={undefined}
           isAdmin={isAdmin}
           onAddComment={handleAddComment}
           onDeleteComment={handleDeleteComment}

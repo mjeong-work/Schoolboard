@@ -158,7 +158,7 @@ export function MarketplacePostDetailPage({ item, onBack, onEdit }: MarketplaceP
               variant="page"
               comments={item.comments}
               currentUserId={user?.id}
-              currentUserName={user?.name}
+              currentUserName={undefined}
               isAdmin={isAdmin}
               onAddComment={handleAddComment}
               onDeleteComment={handleDeleteComment}

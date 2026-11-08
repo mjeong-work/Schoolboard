@@ -141,9 +141,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .from('posts')
       .select(`
         *,
-        profiles!posts_author_id_fkey (name, verified),
         post_likes (user_id),
-        post_comments (id, text, created_at, profiles!post_comments_author_id_fkey (name, id))
+        post_comments (id, author_id, text, created_at)
       `)
       .order('created_at', { ascending: false });
 
@@ -155,9 +154,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       content: p.content,
       image: p.image_url,
       category: p.category,
-      author: p.profiles?.name || getAnonymousName(p.author_id || p.id),
+      author: getAnonymousName(p.id),
       authorId: p.author_id,
-      verified: p.profiles?.verified || false,
+      verified: false,
       // Full timestamp, not the UTC date — a date-only string parses as UTC
       // midnight, so posts showed the wrong day ("Yesterday", or the previous
       // date on the profile page) for anyone not in UTC, and same-day posts
@@ -170,8 +169,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       comments: (p.post_comments || []).map((c: any) => ({
         id: c.id,
         text: c.text,
-        author: c.profiles?.name || getAnonymousName(c.profiles?.id || c.user_id || c.id),
-        authorId: c.profiles?.id || '',
+        author: getAnonymousName(c.id),
+        authorId: c.author_id,
         date: c.created_at,
       })),
     }));
@@ -182,9 +181,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const MARKETPLACE_ITEM_SELECT = `
     *,
-    profiles!marketplace_items_seller_id_fkey (name, verified),
     marketplace_saves (user_id),
-    marketplace_comments (id, text, created_at, profiles!marketplace_comments_author_id_fkey (name, id))
+    marketplace_comments (id, author_id, text, created_at)
   `;
 
   // Shared row -> MarketplaceItem mapping, used by the full-list fetch and
@@ -203,9 +201,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ? item.images
       : (item.image_url ? [item.image_url] : []),
     seller: {
-      name: item.profiles?.name || getAnonymousName(item.seller_id),
+      name: getAnonymousName(item.id),
       contact: item.contact,
-      verified: item.profiles?.verified || false,
+      verified: false,
       id: item.seller_id,
     },
     // Full timestamp, not just the date — comment/post "just now" style
@@ -217,8 +215,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     comments: (item.marketplace_comments || []).map((c: any) => ({
       id: c.id,
       text: c.text,
-      author: c.profiles?.name || getAnonymousName(c.profiles?.id || c.user_id || c.id),
-      authorId: c.profiles?.id || '',
+      author: getAnonymousName(c.id),
+      authorId: c.author_id,
       date: c.created_at,
     })),
     locationName: item.location_name ?? undefined,
@@ -305,7 +303,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       content: postData.content,
       image: postData.image,
       category: postData.category,
-      author: user.name,
+      author: getAnonymousName(data.id),
       authorId: user.id,
       verified: user.verified,
       date: data.created_at ?? new Date().toISOString(),
@@ -429,7 +427,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     const newComment: Comment = {
       id: data.id,
-      author: user.name,
+      author: getAnonymousName(data.id),
       authorId: user.id,
       text: trimmed,
       date: data.created_at ?? new Date().toISOString(),
@@ -467,10 +465,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .from('events')
       .select(`
         *,
-        profiles!events_author_id_fkey (name),
         event_rsvps (user_id),
         event_likes (user_id),
-        event_comments (id, text, created_at, profiles!event_comments_author_id_fkey (name, id))
+        event_comments (id, author_id, text, created_at)
       `)
       .order('date', { ascending: true });
 
@@ -491,7 +488,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       locationLng: e.location_lng ?? undefined,
       googlePlaceId: e.google_place_id ?? undefined,
       locationRadiusMeters: e.location_radius_meters ?? 300,
-      author: e.profiles?.name || getAnonymousName(e.author_id || e.id),
+      author: getAnonymousName(e.id),
       authorId: e.author_id,
       participants: (e.event_rsvps || []).map((r: any) => r.user_id),
       likes: (e.event_likes || []).map((l: any) => l.user_id),
@@ -499,8 +496,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       comments: (e.event_comments || []).map((c: any) => ({
         id: c.id,
         text: c.text,
-        author: c.profiles?.name || getAnonymousName(c.profiles?.id || c.user_id || c.id),
-        authorId: c.profiles?.id || '',
+        author: getAnonymousName(c.id),
+        authorId: c.author_id,
         date: c.created_at,
       })),
     }));
@@ -537,7 +534,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newEvent: Event = {
       ...eventData,
       id: data.id,
-      author: user.name,
+      author: getAnonymousName(data.id),
       authorId: user.id,
       participants: [],
       likes: [],
@@ -567,8 +564,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (updates.locationRadiusMeters !== undefined)
       dbUpdates.location_radius_meters = updates.locationRadiusMeters;
 
-    const { error } = await supabase.from('events').update(dbUpdates).eq('id', eventId);
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const { data, error } = await supabase
+      .from('events')
+      .update(dbUpdates)
+      .eq('id', eventId)
+      .gte('date', todayStr)
+      .select('id');
     if (error) { console.error('[updateEvent]', error); throw new Error(error.message); }
+    if (!data || data.length === 0) {
+      throw new Error('Past events are view-only and cannot be edited.');
+    }
     setEvents(prev => sortEventsByDate(prev.map(e => (e.id === eventId ? { ...e, ...updates } : e))));
   };
 
@@ -612,7 +618,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) { console.error('[addCommentToEvent]', error); throw new Error(error.message); }
     const newComment: Comment = {
       id: data.id,
-      author: user.name,
+      author: getAnonymousName(data.id),
       authorId: user.id,
       text: trimmed,
       date: data.created_at ?? new Date().toISOString(),
@@ -832,7 +838,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // instead of re-downloading the listing.
     const newComment: Comment = {
       id: data.id,
-      author: user.name,
+      author: getAnonymousName(data.id),
       authorId: user.id,
       text: trimmed,
       date: data.created_at ?? new Date().toISOString(),

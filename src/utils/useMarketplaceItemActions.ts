@@ -3,6 +3,7 @@ import { toast } from 'sonner@2.0.3';
 import { useData, type MarketplaceItem } from './dataContext';
 import { useAuth } from './authContext';
 import { useChat } from './chatContext';
+import { getAnonymousName } from './anonymousName';
 
 /**
  * Save/contact/delete/comment handlers for a single marketplace listing.
@@ -42,7 +43,8 @@ export function useMarketplaceItemActions(item: MarketplaceItem) {
       const conversationId = await getOrCreateConversation(
         item.seller.id,
         item.seller.name,
-        { type: 'marketplace', itemId: item.id, itemTitle: item.title }
+        { type: 'marketplace', itemId: item.id, itemTitle: item.title },
+        getAnonymousName(`${item.id}:${user.id}`)
       );
       if (!conversationId) {
         toast.error('Could not start conversation. Please try again.');

@@ -41,9 +41,6 @@ export function EventCard({ event }: EventCardProps) {
   const hasRSVPed = hasUserRSVPed(event.id);
   const isOwnEvent = user?.id === event.authorId;
   const isAdmin = user?.role === 'Administrator';
-  // Past events stay fully viewable (RSVP/like/comment always work) but the
-  // author can no longer edit them — only compare date strings to avoid
-  // UTC-vs-local timezone skew.
   const todayStr = new Date().toLocaleDateString('en-CA');
   const isPastEvent = event.date < todayStr;
 
@@ -61,11 +58,12 @@ export function EventCard({ event }: EventCardProps) {
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
+      year: 'numeric',
       month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
+      day: 'numeric'
     });
   };
 
@@ -136,7 +134,6 @@ export function EventCard({ event }: EventCardProps) {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[#999] text-sm font-[Roboto]">{formatDate(event.date)}</span>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="p-1 hover:bg-black/5 rounded-full transition-colors">
@@ -171,11 +168,11 @@ export function EventCard({ event }: EventCardProps) {
           {/* Event Title */}
           <h3 className="text-[15px] text-[rgb(51,51,51)] mb-2 leading-snug font-[Roboto]">{event.title}</h3>
 
-          {/* Event Details - Compact */}
+          {/* Event Details */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#666] mb-2">
             <div className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" strokeWidth={2} />
-              <span>{event.time}</span>
+              <span>{formatDate(event.date)} {event.time}</span>
             </div>
             <span className="text-[#ddd]">•</span>
             <div className="flex items-center gap-1">
@@ -203,7 +200,7 @@ export function EventCard({ event }: EventCardProps) {
             </div>
           )}
 
-          {/* Map (shown when the event has GPS coordinates) */}
+          {/* Map */}
           {event.locationLat !== undefined && event.locationLng !== undefined && (
             <div className="mb-3">
               <EventLocationMap
@@ -218,7 +215,6 @@ export function EventCard({ event }: EventCardProps) {
 
           {/* Action Buttons Row */}
           <div className="flex items-center gap-1 mb-3">
-            {/* RSVP Button */}
             <button
               onClick={handleRSVP}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
@@ -231,7 +227,6 @@ export function EventCard({ event }: EventCardProps) {
               {hasRSVPed ? 'Going' : 'RSVP'}
             </button>
 
-            {/* Contact Host - Only if not own event */}
             {!isOwnEvent && (
               <button
                 onClick={handleContactHost}
@@ -284,7 +279,6 @@ export function EventCard({ event }: EventCardProps) {
       />
     </div>
 
-    {/* Edit event dialog — only rendered when the author opens it */}
     {isEditOpen && (
       <EditEventDialog
         open={isEditOpen}

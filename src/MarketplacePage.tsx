@@ -65,9 +65,9 @@ export default function MarketplacePage() {
       locationLng: newListing.locationLng,
       googlePlaceId: newListing.googlePlaceId,
       seller: {
-        name: user?.name || 'Anonymous Student',
+        name: 'Anonymous Seller',
         contact: '',
-        verified: user?.verified || false,
+        verified: false,
       },
     });
     toast.success('Listing created successfully!');
