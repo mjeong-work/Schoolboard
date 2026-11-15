@@ -5,6 +5,7 @@ import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
 import { Eye, EyeOff, UserPlus } from 'lucide-react';
+import { isSchoolEmail } from './utils/schoolEmail';
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -68,8 +69,11 @@ export default function RegisterPage() {
 
     if (!result.success) {
       setError(result.message);
+    } else if (result.needsVerification) {
+      window.location.hash = '#/verify-email';
     } else {
-      // Redirect to verification pending page
+      // "Confirm email" disabled in Supabase: session exists immediately,
+      // fall back to the status-based routing.
       window.location.hash = '#/verification';
     }
   };
@@ -122,9 +126,9 @@ export default function RegisterPage() {
               <p className="text-xs text-[#666]">Letters and numbers only, min 4 characters. This is your login ID and cannot be changed.</p>
             </div>
 
-            {/* Recovery Email */}
+            {/* School Email */}
             <div className="space-y-2">
-              <Label htmlFor="email">Recovery Email</Label>
+              <Label htmlFor="email">School Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -133,7 +137,18 @@ export default function RegisterPage() {
                 onChange={(e) => updateFormData('email', e.target.value)}
                 required
               />
-              <p className="text-xs text-[#666]">Used for password recovery and communications. Not shown to other users.</p>
+              <p className="text-xs text-[#666]">We'll send a verification code to this address. Not shown to other users.</p>
+              {formData.email.includes('@') && formData.email.split('@')[1]?.includes('.') && (
+                isSchoolEmail(formData.email) ? (
+                  <p className="text-xs text-green-600">
+                    School email detected — your account activates as soon as you enter the code.
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-600">
+                    Not a recognized school domain — after verifying the code, your account will also need admin approval.
+                  </p>
+                )
+              )}
             </div>
 
             {/* Role */}
