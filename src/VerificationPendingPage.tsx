@@ -118,9 +118,9 @@ export default function VerificationPendingPage() {
               <span className="text-[#111]">What happens next?</span>
             </p>
             <ul className="text-left space-y-1 text-xs">
-              <li>• Our admin team will verify your campus email</li>
-              <li>• We'll check your information against university records</li>
-              <li>• You'll receive approval within 24-48 hours</li>
+              <li>• Your email domain isn't on our recognized school list, so an admin reviews it manually</li>
+              <li>• School emails (.edu, .ac.kr, ...) are approved automatically — you can re-register with one anytime</li>
+              <li>• You'll typically hear back within 24-48 hours</li>
               <li>• Once approved, you'll have full access to Campus Connect</li>
             </ul>
           </div>
