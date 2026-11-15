@@ -13,6 +13,7 @@ import LoginPage from "./LoginPage";
 import ForgotPasswordPage from "./ForgotPasswordPage";
 import ResetPasswordPage from "./ResetPasswordPage";
 import VerificationPendingPage from "./VerificationPendingPage";
+import VerifyEmailPage from "./VerifyEmailPage";
 import { MessagesPage } from "./components/MessagesPage";
 import { ChatManager } from "./components/ChatManager";
 import { Toaster } from "./components/ui/sonner";
@@ -27,6 +28,7 @@ type PageType =
   | "edit-profile"
   | "messages"
   | "register"
+  | "verify-email"
   | "verification"
   | "login"
   | "forgot-password"
@@ -71,6 +73,11 @@ function AppRouter() {
 
       if (hash === "forgot-password") {
         setCurrentPage("forgot-password");
+        return;
+      }
+
+      if (hash === "verify-email") {
+        setCurrentPage("verify-email");
         return;
       }
 
@@ -143,6 +150,10 @@ function AppRouter() {
 
   if (currentPage === "forgot-password") {
     return <ForgotPasswordPage />;
+  }
+
+  if (currentPage === "verify-email") {
+    return <VerifyEmailPage />;
   }
 
   if (currentPage === "reset-password") {
