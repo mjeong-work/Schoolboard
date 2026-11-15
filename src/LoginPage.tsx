@@ -17,6 +17,10 @@ export default function LoginPage() {
     const result = await login(username, password);
     setLoading(false);
     if (!result.success) {
+      if (result.needsVerification) {
+        window.location.hash = '#/verify-email';
+        return;
+      }
       setError(result.message);
     }
   };
