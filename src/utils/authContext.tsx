@@ -16,12 +16,17 @@ export interface User {
   joinDate?: string;
 }
 
+// Email awaiting OTP verification, handed from Register/Login to VerifyEmailPage.
+export const PENDING_VERIFICATION_EMAIL_KEY = 'cc_pending_verification_email';
+
 interface AuthContextType {
   user: User | null;
   currentUser: User | null;  // alias for user; consumed by chat/marketplace components
   isAuthenticated: boolean;
-  login: (username: string, password: string) => Promise<{ success: boolean; message: string }>;
-  register: (data: RegisterData) => Promise<{ success: boolean; message: string }>;
+  login: (username: string, password: string) => Promise<{ success: boolean; message: string; needsVerification?: boolean }>;
+  register: (data: RegisterData) => Promise<{ success: boolean; message: string; needsVerification?: boolean }>;
+  verifyEmailCode: (email: string, code: string) => Promise<{ success: boolean; message: string }>;
+  resendVerificationCode: (email: string) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => Promise<{ error: { message: string } | null }>;
   refreshUser: () => Promise<void>;
@@ -130,7 +135,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (rpcError || !email) return { success: false, message: 'Username not found' };
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { success: false, message: error.message };
+    if (error) {
+      // Supabase rejects password sign-in until the signup OTP is confirmed.
+      if (error.message.toLowerCase().includes('email not confirmed')) {
+        sessionStorage.setItem(PENDING_VERIFICATION_EMAIL_KEY, email as string);
+        return { success: false, needsVerification: true, message: 'Please verify your email to continue.' };
+      }
+      return { success: false, message: error.message };
+    }
     return { success: true, message: 'Login successful' };
   };
 
@@ -156,7 +168,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (authError) return { success: false, message: authError.message };
     if (!authData.user) return { success: false, message: 'Registration failed' };
 
-    return { success: true, message: 'Registration successful! Your account is pending approval.' };
+    // With "Confirm email" enabled, signUp returns no session until the
+    // emailed OTP is verified.
+    if (!authData.session) {
+      sessionStorage.setItem(PENDING_VERIFICATION_EMAIL_KEY, data.email);
+      return { success: true, needsVerification: true, message: 'We sent a verification code to your email.' };
+    }
+
+    return { success: true, message: 'Registration successful!' };
+  };
+
+  const verifyEmailCode = async (email: string, code: string) => {
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'signup' });
+    if (error) return { success: false, message: error.message };
+    sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
+    // A session now exists; onAuthStateChange fetches the profile.
+    return { success: true, message: 'Email verified!' };
+  };
+
+  const resendVerificationCode = async (email: string) => {
+    const { error } = await supabase.auth.resend({ type: 'signup', email });
+    if (error) return { success: false, message: error.message };
+    return { success: true, message: 'A new code has been sent.' };
   };
 
   const logout = async () => {
@@ -188,7 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, currentUser: user, isAuthenticated: !!user, login, register, logout, updateUser, refreshUser }}>
+    <AuthContext.Provider value={{ user, currentUser: user, isAuthenticated: !!user, login, register, verifyEmailCode, resendVerificationCode, logout, updateUser, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
