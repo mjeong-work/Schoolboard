@@ -26,6 +26,15 @@
 --   4. _backup_20261024_* tables (base64 image copies) were publicly
 --      readable. Same lock-down as 20261121000300, applied early.
 --
+--   5. Impersonation: on production, INSERT policies on posts,
+--      post_comments and post_likes have WITH CHECK (true), so a member
+--      could post, comment or like under another member's id. Profiles
+--      has an "Enable insert for authenticated users" WITH CHECK (true).
+--      -> RESTRICTIVE insert policies requiring the owner column to be
+--         auth.uid() on every user-content table. Restrictive policies
+--         apply on top of whatever permissive ones exist, so this works
+--         without knowing every drifted policy name.
+--
 -- Not changed here (needs a product decision): get_email_by_username
 -- lets anyone turn a username into an email address.
 -- =============================================================
@@ -99,6 +108,36 @@ BEGIN
     IF to_regclass('public.' || t) IS NOT NULL THEN
       EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
       EXECUTE format('REVOKE ALL ON public.%I FROM anon, authenticated', t);
+    END IF;
+  END LOOP;
+END $$;
+
+-- 5. Content is always inserted under your own id -----------------------
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON public.profiles;
+
+DO $$
+DECLARE
+  pair text[];
+BEGIN
+  FOREACH pair SLICE 1 IN ARRAY ARRAY[
+    ['posts', 'author_id'],
+    ['post_comments', 'author_id'],
+    ['post_likes', 'user_id'],
+    ['post_history', 'edited_by'],
+    ['events', 'author_id'],
+    ['event_comments', 'author_id'],
+    ['event_likes', 'user_id'],
+    ['event_rsvps', 'user_id'],
+    ['marketplace_items', 'seller_id'],
+    ['marketplace_comments', 'author_id'],
+    ['marketplace_saves', 'user_id']
+  ] LOOP
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_schema = 'public' AND table_name = pair[1] AND column_name = pair[2]) THEN
+      EXECUTE format('DROP POLICY IF EXISTS "Owner: insert as yourself" ON public.%I', pair[1]);
+      EXECUTE format(
+        'CREATE POLICY "Owner: insert as yourself" ON public.%I AS RESTRICTIVE FOR INSERT
+           TO authenticated WITH CHECK (%I = (SELECT auth.uid()))', pair[1], pair[2]);
     END IF;
   END LOOP;
 END $$;

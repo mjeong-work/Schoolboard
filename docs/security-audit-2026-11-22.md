@@ -23,6 +23,7 @@ Production project: `blqryjhjwtygafjwxbup`. Nothing below has been applied there
 | 4 | High | `_backup_20261024_*` tables (base64 image copies, 3 / 7 / 1 rows) are readable with the public anon key. | Anon counts on prod. |
 | 5 | Medium | `get_email_by_username` is callable by anyone, so any known or guessed username can be turned into an email address. | Anon RPC returned 200. Login depends on it. Product decision needed. |
 | 6 | Data loss | Re-running `20261121000300` on prod would null base64 images posted since Oct 24 without backing them up (`CREATE TABLE IF NOT EXISTS` copies nothing). The prod frontend still saves base64 images. | **Fixed in this commit**: the migration now appends unseen rows to the backups. Tested locally. |
+| 8 | High | Impersonation: the prod INSERT policies on `posts`, `post_comments` and `post_likes` (and `Enable insert for authenticated users` on `profiles`) have `WITH CHECK (true)`, so a member can post, comment or like under another member's id. | Prod `pg_policies.with_check`. Reproduced locally with the same policies. **Fixed in the hotfix** (restrictive owner-insert policies). |
 | 7 | Process | Version collision. Prod ran the Oct 24 batch as `20260829000000…20261024000100`; `20260829000000` is also `add_admin_author_reveal_rpc`. Tables like `posts` were created outside migrations. | `db push` needs `migration repair` first, and a staging copy must come from a prod schema dump, not from the migrations folder. |
 
 ## Fix prepared (file only, unapplied)
@@ -99,7 +100,9 @@ select (select count(*) from posts where image_url like 'data:%') posts,
     - `Authenticated users can read saves`
   - Duplicate policies sit on `profiles` (2× update own, 3× insert own). The update ones are covered by the hotfix trigger.
   - Since the blocking and hiding policies are RESTRICTIVE, the permissive duplicates don't bypass them. Re-tested locally with prod's exact policy set: suite 101/101, hotfix probe as above.
-- **Admins**: 4 accounts (2026-04-10, 2026-07-29, 2026-08-22 13:00, 2026-08-22 13:10). The owner still needs to confirm that each one is legitimate.
+- **Admins**: 4 accounts (2026-04-10, 2026-07-29, 2026-08-22 13:00, 2026-08-22 13:10). The owner confirmed all four are intentional, so no demotion is needed. Re-run the admin query after the hotfix and periodically.
+- **INSERT `with_check`**: `true` on `posts`, `post_comments`, `post_likes` and `profiles` ("Enable insert…"). See finding 8.
+- **Chat-name anonymization (20260905)**: 0 / 0 non-anonymous labels, so it was applied by hand.
 - **base64 images**: posts 0, events 1, items 0. `000300` now backs up the event image before clearing it.
 
 Still to check (read-only):
@@ -142,7 +145,7 @@ Each production step needs explicit approval.
    - Signed out, A sees nothing.
    - Login still works.
 3. **Prod hotfix (approval):** run `20261120000000_security_hotfix.sql` in the SQL editor. Re-run the anon probe; expect 401/403 on all tables. Sign in as a normal user and an admin.
-4. Review the admin list from step 0 and demote any account that shouldn't be admin (approval).
+4. ~~Review the admin list~~: done, all 4 accounts are intentional. Re-check after step 3.
 5. Decide on `get_email_by_username`: email-only login, or a server-side username login (Edge Function) that never returns the email.
 6. Reconcile migration history on prod (approval):
    - After the hotfix from step 3: `supabase migration repair --status applied 20261120000000`.
