@@ -6,6 +6,7 @@ import LoginPage from "./LoginPage";
 import { ChatManager } from "./components/ChatManager";
 import { Toaster } from "./components/ui/sonner";
 import { isSupabaseConfigured, isStagingSchema, dbSchema } from "./utils/supabaseClient";
+import { getPolicySlug } from "./policies/policyRoutes";
 
 // Route-level code splitting: everything below is only ever shown after
 // the user lands on a specific page, so none of it needs to be in the
@@ -27,6 +28,7 @@ const VerifyEmailPage = lazy(() => import("./VerifyEmailPage"));
 const MessagesPage = lazy(() =>
   import("./components/MessagesPage").then((m) => ({ default: m.MessagesPage }))
 );
+const PolicyPage = lazy(() => import("./policies/PolicyPage"));
 
 // Minimal, theme-neutral placeholder — shown only for the brief moment a
 // page chunk is fetched, never long enough to need real skeleton UI.
@@ -241,6 +243,16 @@ function AppRouter() {
 }
 
 export default function App() {
+  // Policy pages are public: render them before any auth/data providers.
+  const policySlug = getPolicySlug(window.location.pathname);
+  if (policySlug) {
+    return (
+      <Suspense fallback={<PageLoadingFallback />}>
+        <PolicyPage slug={policySlug} />
+      </Suspense>
+    );
+  }
+
   if (!isSupabaseConfigured) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center px-6 font-[Roboto]">

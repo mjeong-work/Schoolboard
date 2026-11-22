@@ -269,7 +269,22 @@ export default function RegisterPage() {
 
         {/* Footer */}
         <p className="text-center text-xs text-[#999] mt-8">
-          By creating an account, you agree to our Terms of Service and Privacy Policy
+          By creating an account, you agree to our{' '}
+          <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#0b5fff]">
+            Terms of Service
+          </a>{' '}
+          and{' '}
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#0b5fff]">
+            Privacy Policy
+          </a>
+        </p>
+        <p className="text-center text-xs text-[#999] mt-2 space-x-3">
+          <a href="/community-guidelines" target="_blank" rel="noopener noreferrer" className="hover:text-[#0b5fff] hover:underline">
+            Community Guidelines
+          </a>
+          <a href="/child-safety" target="_blank" rel="noopener noreferrer" className="hover:text-[#0b5fff] hover:underline">
+            Child Safety Standards
+          </a>
         </p>
       </div>
     </div>
