@@ -5,9 +5,11 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
-import { Camera, X } from 'lucide-react';
+import { Camera, X, Loader2 } from 'lucide-react';
 import { LocationAutocomplete, type LocationData } from './LocationAutocomplete';
 import { toast } from 'sonner@2.0.3';
+import { useAuth } from '../utils/authContext';
+import { uploadImage, validateImageFile, ImageUploadError } from '../utils/imageUpload';
 
 const TIME_SLOTS = [
   '8:00 AM', '8:30 AM', '9:00 AM', '9:30 AM',
@@ -40,12 +42,13 @@ interface CreateEventDialogProps {
     locationLat?: number;
     locationLng?: number;
     googlePlaceId?: string;
-  }) => void;
+  }) => void | Promise<void>;
 }
 
 const EMPTY_LOCATION: LocationData = { displayText: '' };
 
 export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventDialogProps) {
+  const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -54,9 +57,12 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
   const [eventFormat, setEventFormat] = useState('Academic');
   const [description, setDescription] = useState('');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
+    if (uploadedImage?.startsWith('blob:')) URL.revokeObjectURL(uploadedImage);
     setTitle('');
     setDate('');
     setTime('');
@@ -65,6 +71,7 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
     setEventFormat('Academic');
     setDescription('');
     setUploadedImage(null);
+    setImageFile(null);
   };
 
   const closeAndReset = (next: boolean) => {
@@ -78,33 +85,51 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
   const venue = eventType === 'online' ? ONLINE_VENUE : locationData.displayText.trim();
   const isSubmitDisabled = !title.trim() || !date || !time || !venue || !description.trim();
 
-  const handleSubmit = () => {
-    if (isSubmitDisabled) return;
+  const handleSubmit = async () => {
+    if (isSubmitDisabled || isSubmitting || !user) return;
+    setIsSubmitting(true);
+    try {
+      let imageUrl: string | undefined;
+      if (imageFile) {
+        imageUrl = await uploadImage(imageFile, 'event', user.id);
+      }
 
-    onSubmit({
-      title: title.trim(),
-      date,
-      time,
-      venue,
-      description: description.trim(),
-      image: uploadedImage || undefined,
-      category: eventFormat,
-      locationName: eventType === 'in-person' ? locationData.locationName : undefined,
-      locationAddress: eventType === 'in-person' ? locationData.locationAddress : undefined,
-      locationLat: eventType === 'in-person' ? locationData.locationLat : undefined,
-      locationLng: eventType === 'in-person' ? locationData.locationLng : undefined,
-      googlePlaceId: eventType === 'in-person' ? locationData.googlePlaceId : undefined,
-    });
+      await onSubmit({
+        title: title.trim(),
+        date,
+        time,
+        venue,
+        description: description.trim(),
+        image: imageUrl,
+        category: eventFormat,
+        locationName: eventType === 'in-person' ? locationData.locationName : undefined,
+        locationAddress: eventType === 'in-person' ? locationData.locationAddress : undefined,
+        locationLat: eventType === 'in-person' ? locationData.locationLat : undefined,
+        locationLng: eventType === 'in-person' ? locationData.locationLng : undefined,
+        googlePlaceId: eventType === 'in-person' ? locationData.googlePlaceId : undefined,
+      });
 
-    closeAndReset(false);
+      closeAndReset(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to create event. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => setUploadedImage(reader.result as string);
-    reader.readAsDataURL(file);
+    try {
+      validateImageFile(file, 'event');
+    } catch (err) {
+      toast.error(err instanceof ImageUploadError ? err.message : 'Could not use that image.');
+      e.target.value = '';
+      return;
+    }
+    if (uploadedImage?.startsWith('blob:')) URL.revokeObjectURL(uploadedImage);
+    setImageFile(file);
+    setUploadedImage(URL.createObjectURL(file));
   };
 
   const fieldClass = 'border-[#e5e7eb] bg-white rounded-md';
@@ -128,9 +153,10 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={isSubmitDisabled}
-              className="bg-black text-white rounded-full px-4 h-8 text-sm font-semibold disabled:bg-[#e5e7eb] disabled:text-[#999] transition-colors"
+              disabled={isSubmitDisabled || isSubmitting}
+              className="bg-black text-white rounded-full px-4 h-8 text-sm font-semibold disabled:bg-[#e5e7eb] disabled:text-[#999] transition-colors flex items-center gap-1.5"
             >
+              {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Done
             </button>
           </div>
@@ -158,7 +184,7 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp,image/gif"
                 className="hidden"
                 onChange={handleImageUpload}
               />

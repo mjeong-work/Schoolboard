@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { toast } from 'sonner@2.0.3';
 import { EditPostDialog } from './EditPostDialog';
 import { CommentsSheet } from './CommentsSheet';
@@ -31,13 +32,19 @@ export function PostCard({ post }: PostCardProps) {
 
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const isLiked = isPostLiked(post.id);
   const isOwnPost = user?.id === post.authorId;
   const isAdmin = user?.role === 'Administrator';
 
-  const handleLike = () => {
-    toggleLikePost(post.id);
+  const handleLike = async () => {
+    try {
+      await toggleLikePost(post.id);
+    } catch {
+      toast.error("Couldn't update like. Please try again.");
+    }
   };
 
   const handleAddComment = async (text: string) => {
@@ -46,6 +53,7 @@ export function PostCard({ post }: PostCardProps) {
       toast.success('Comment added');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to add comment');
+      throw err; // lets CommentsPanel keep the draft instead of clearing it
     }
   };
 
@@ -59,21 +67,23 @@ export function PostCard({ post }: PostCardProps) {
   };
 
   const handleDeletePost = async () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
     try {
       await deletePost(post.id);
       toast.success('Post deleted');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to delete post');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
+  // Errors propagate to EditPostDialog, which shows them and stays open
+  // with the user's edits intact instead of closing as if it had saved.
   const handleEditPost = async (updates: { title: string; content: string; image: string | null; category: string }) => {
-    try {
-      await updatePost(post.id, updates);
-      toast.success('Post updated');
-    } catch {
-      toast.error('Failed to update post');
-    }
+    await updatePost(post.id, updates);
+    toast.success('Post updated');
   };
 
   const formatDate = (dateString: string) => {
@@ -110,9 +120,9 @@ export function PostCard({ post }: PostCardProps) {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[#999] text-sm font-[Roboto]">{formatDate(post.date)}</span>
-              <DropdownMenu>
+              <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                  <button className="p-1 hover:bg-black/5 rounded-full transition-colors">
+                  <button className="p-1 hover:bg-black/5 rounded-full transition-colors" aria-label="Post options">
                     <MoreHorizontal className="w-4 h-4 text-[#999]" strokeWidth={2} />
                   </button>
                 </DropdownMenuTrigger>
@@ -128,13 +138,16 @@ export function PostCard({ post }: PostCardProps) {
                   {(isOwnPost || isAdmin) && (
                     <DropdownMenuItem
                       className="cursor-pointer text-red-600 focus:text-red-600"
-                      onClick={handleDeletePost}
+                      disabled={isDeleting}
+                      onClick={() => setIsDeleteConfirmOpen(true)}
                     >
                       Delete post
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem className="cursor-pointer">Report post</DropdownMenuItem>
-                  <DropdownMenuItem className="cursor-pointer">Share post</DropdownMenuItem>
+                  {/* Reporting is specced but not built yet — say so rather than
+                      silently doing nothing (see Week 1 reporting spec). */}
+                  <DropdownMenuItem className="cursor-pointer" onClick={() => toast("Reporting isn't available yet.")}>Report post</DropdownMenuItem>
+                  <DropdownMenuItem className="cursor-pointer" onClick={() => toast("Sharing isn't available yet.")}>Share post</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -198,6 +211,13 @@ export function PostCard({ post }: PostCardProps) {
         isAdmin={isAdmin}
         onAddComment={handleAddComment}
         onDeleteComment={handleDeleteComment}
+      />
+
+      <ConfirmDeleteDialog
+        open={isDeleteConfirmOpen}
+        onOpenChange={setIsDeleteConfirmOpen}
+        title="Delete this post?"
+        onConfirm={handleDeletePost}
       />
 
       {isEditOpen && (

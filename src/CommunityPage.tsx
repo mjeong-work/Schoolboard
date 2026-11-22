@@ -119,7 +119,7 @@ const mockPosts = [
 ];
 
 export default function CommunityPage() {
-  const { posts, addPost } = useData();
+  const { posts, addPost, isLoading, loadError, retryLoad } = useData();
   const [selectedTab, setSelectedTab] = useState('all-school');
   const [sortBy, setSortBy] = useState('latest');
   const [searchQuery, setSearchQuery] = useState('');
@@ -132,18 +132,16 @@ export default function CommunityPage() {
     content: string;
     image?: string;
   }) => {
-    try {
-      await addPost({
-        title: newPost.title,
-        content: newPost.content,
-        image: newPost.image || null,
-        category: newPost.category as 'current-students' | 'alumni' | 'all-school',
-      });
-      toast.success('Post created successfully!');
-    } catch (err: any) {
-      console.error('[handleCreatePost]', err);
-      toast.error(err?.message || 'Failed to create post. Please try again.');
-    }
+    // Not caught here — CreatePostDialog awaits this and needs the rejection
+    // so it can show the error and stay open with the draft intact. Catching
+    // it here made the dialog close (and discard the post) even on failure.
+    await addPost({
+      title: newPost.title,
+      content: newPost.content,
+      image: newPost.image || null,
+      category: newPost.category as 'current-students' | 'alumni' | 'all-school',
+    });
+    toast.success('Post created successfully!');
   };
 
   // Filter and search logic
@@ -266,7 +264,21 @@ export default function CommunityPage() {
 
       {/* Posts Feed - Threads Style */}
       <main className="max-w-[640px] mx-auto">
-        {filteredAndSortedPosts.length > 0 ? (
+        {isLoading && posts.length === 0 ? (
+          <div className="text-center py-16 px-4">
+            <p className="text-[#999] text-sm">Loading posts…</p>
+          </div>
+        ) : loadError && posts.length === 0 ? (
+          <div className="text-center py-16 px-4">
+            <p className="text-[#999] text-sm mb-3">Couldn't load posts.</p>
+            <Button
+              onClick={() => retryLoad()}
+              className="bg-black hover:bg-black/80 text-white px-4 h-8 rounded-full text-sm font-[Roboto]"
+            >
+              Try again
+            </Button>
+          </div>
+        ) : filteredAndSortedPosts.length > 0 ? (
           <div>
             {filteredAndSortedPosts.map((post) => (
               <PostCard key={post.id} post={post} />

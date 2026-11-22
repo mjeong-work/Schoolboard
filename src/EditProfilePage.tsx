@@ -10,49 +10,17 @@ import { Avatar, AvatarFallback, AvatarImage } from './components/ui/avatar';
 import { Upload } from 'lucide-react';
 import { useAuth } from './utils/authContext';
 import { supabase } from './utils/supabaseClient';
+import { compressImage } from './utils/imageCompression';
+import { validateImageFile, ImageUploadError, IMAGE_UPLOAD_CONFIGS } from './utils/imageUpload';
 import { toast } from 'sonner@2.0.3';
 
 const BIO_MAX_LENGTH = 240;
-const AVATAR_MAX_DIMENSION = 512;
 
 // Graduation year options span from 6 years back (alumni still updating
 // their profile) to 6 years ahead (incoming students), recomputed against
 // the current year instead of a hardcoded range that goes stale.
 const currentYear = new Date().getFullYear();
 const graduationYearOptions = Array.from({ length: 13 }, (_, i) => currentYear + 6 - i);
-
-// Avatars render at ~96px max, so there's no reason to upload a multi-MB
-// phone photo as-is. Downscale to a small square-ish JPEG client-side
-// before it ever touches Supabase Storage.
-function compressImage(file: File, maxDimension = AVATAR_MAX_DIMENSION, quality = 0.85): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext('2d');
-      URL.revokeObjectURL(objectUrl);
-      if (!ctx) {
-        reject(new Error('Canvas not supported'));
-        return;
-      }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(
-        (blob) => (blob ? resolve(blob) : reject(new Error('Image compression failed'))),
-        'image/jpeg',
-        quality
-      );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Could not read image'));
-    };
-    img.src = objectUrl;
-  });
-}
 
 export default function EditProfilePage() {
   const { user, updateUser } = useAuth();
@@ -67,6 +35,7 @@ export default function EditProfilePage() {
 
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar || '');
   const [pendingAvatarBlob, setPendingAvatarBlob] = useState<Blob | null>(null);
+  const [pendingAvatarMimeType, setPendingAvatarMimeType] = useState<string>('image/jpeg');
   const [saving, setSaving] = useState(false);
   const [processingPhoto, setProcessingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -91,21 +60,25 @@ export default function EditProfilePage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file.');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be smaller than 5 MB.');
+    try {
+      validateImageFile(file, 'avatar');
+    } catch (err) {
+      toast.error(err instanceof ImageUploadError ? err.message : 'Could not use that image.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     setProcessingPhoto(true);
     try {
-      const compressed = await compressImage(file);
+      const config = IMAGE_UPLOAD_CONFIGS.avatar;
+      const { blob, mimeType } = await compressImage(file, {
+        maxDimension: config.maxDimension,
+        targetBytes: config.targetBytes,
+      });
       if (avatarPreview.startsWith('blob:')) URL.revokeObjectURL(avatarPreview);
-      setPendingAvatarBlob(compressed);
-      setAvatarPreview(URL.createObjectURL(compressed));
+      setPendingAvatarBlob(blob);
+      setPendingAvatarMimeType(mimeType);
+      setAvatarPreview(URL.createObjectURL(blob));
     } catch (err: any) {
       toast.error(err?.message || 'Could not process that image.');
     } finally {
@@ -126,7 +99,7 @@ export default function EditProfilePage() {
     if (pendingAvatarBlob) {
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(user.id, pendingAvatarBlob, { upsert: true, contentType: 'image/jpeg' });
+        .upload(user.id, pendingAvatarBlob, { upsert: true, contentType: pendingAvatarMimeType });
 
       if (uploadError) {
         toast.error(uploadError.message || 'Photo upload failed.');
@@ -200,7 +173,7 @@ export default function EditProfilePage() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
                   className="hidden"
                   onChange={handleFileChange}
                 />

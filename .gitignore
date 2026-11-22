@@ -29,3 +29,6 @@ Thumbs.db
 npm-debug.log*
 
 .vercel
+
+# Supabase CLI local state (per-machine, never commit)
+supabase/.temp/

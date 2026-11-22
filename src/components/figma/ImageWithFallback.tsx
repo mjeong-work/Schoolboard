@@ -10,7 +10,11 @@ export function ImageWithFallback(props: React.ImgHTMLAttributes<HTMLImageElemen
     setDidError(true)
   }
 
-  const { src, alt, style, className, ...rest } = props
+  const { src, alt, style, className, loading, ...rest } = props
+  // Default to lazy-loading every image rendered through this component
+  // (feed/card/detail photos) — callers can still opt out by passing
+  // loading="eager" explicitly (e.g. an above-the-fold hero image).
+  const loadingAttr = loading ?? 'lazy'
 
   return didError ? (
     <div
@@ -22,6 +26,6 @@ export function ImageWithFallback(props: React.ImgHTMLAttributes<HTMLImageElemen
       </div>
     </div>
   ) : (
-    <img src={src} alt={alt} className={className} style={style} {...rest} onError={handleError} />
+    <img src={src} alt={alt} className={className} style={style} loading={loadingAttr} {...rest} onError={handleError} />
   )
 }
