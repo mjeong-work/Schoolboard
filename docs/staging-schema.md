@@ -105,3 +105,30 @@ Production already has the Oct 24 batch under its old version numbers, plus `202
 2. Re-create the test users there and run `staging_seed.sql` with `staging.` replaced by `public.`. Or keep a project-agnostic seed: the seed is plain SQL against the app tables.
 3. Point `.env.staging.local` at the new URL and key, and remove `VITE_SUPABASE_DB_SCHEMA`. The app code needs no other change.
 4. In production, run `staging_teardown.sql`, remove `staging` from Exposed schemas, and delete the 3 test users.
+
+## Applied and tested — 2026-11-22
+
+- **S1–S4**:
+  - The owner ran S2 and S4 through `supabase/staging/apply_staging.ps1`.
+  - Both runs: production `public` schema fingerprint and every row count unchanged.
+  - Result: 18 staging tables, all 18 gated.
+  - Then S1: `staging` exposed. Anon gets 401 on staging and on public.
+  - Then S3: 3 test users (`test1`/`test2`/`test3@test.com` = A/B/Admin).
+- **UI on `npm run dev:staging`** (owner signed in; Claude drove the browser):
+  - **A**:
+    - Reported B's post, comment and listing.
+    - A second report on the same item shows "Already reported".
+    - "Something else" needs details.
+    - Own post has no Report or Block.
+    - Blocked B from a listing: B's post, listing and event disappeared at once. Unblocking brought them back.
+  - **B**: A's post and comments are hidden (symmetric). Nothing shows that B was reported or blocked.
+  - **Admin**:
+    - The queue shows the 3 cases, by alias only.
+    - Hide & resolve with a note works, then restore works. Both appear in the audit history, and the button positions stay stable.
+    - The Blocking tab shows aggregates only (1 block, from a listing).
+    - Counts reflect staging data only.
+- **Not exercised in the UI** (covered by the local SQL suite):
+  - Hidden content disappearing for A/B
+  - Remove (irreversible)
+  - Interactions across a block
+- **Small bug**: after "Restore" without a note, the decision record still shows the previous decision's note. The audit history itself is correct.
