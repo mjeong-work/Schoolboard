@@ -38,6 +38,32 @@ WHERE image_url LIKE 'data:%'
 -- public anon key (author/seller ids + titles). Lock them down to the
 -- service role / SQL editor. Safe to re-run on a database that already
 -- has the tables.
+-- The tables already exist where an earlier version of this migration
+-- ran (production ran it as 20261024000000). CREATE ... IF NOT EXISTS
+-- then copies nothing, so append rows that aren't backed up yet; the
+-- UPDATEs below would otherwise null newer images with no copy.
+INSERT INTO public._backup_20261024_posts_images (id, author_id, title, image_url, created_at)
+SELECT p.id, p.author_id, p.title, p.image_url, p.created_at
+FROM public.posts p
+WHERE p.image_url LIKE 'data:%'
+  AND NOT EXISTS (SELECT 1 FROM public._backup_20261024_posts_images b
+                  WHERE b.id = p.id AND b.image_url IS NOT DISTINCT FROM p.image_url);
+INSERT INTO public._backup_20261024_events_images (id, author_id, title, image_url, created_at)
+SELECT e.id, e.author_id, e.title, e.image_url, e.created_at
+FROM public.events e
+WHERE e.image_url LIKE 'data:%'
+  AND NOT EXISTS (SELECT 1 FROM public._backup_20261024_events_images b
+                  WHERE b.id = e.id AND b.image_url IS NOT DISTINCT FROM e.image_url);
+INSERT INTO public._backup_20261024_marketplace_items_images (id, seller_id, title, image_url, images, created_at)
+SELECT m.id, m.seller_id, m.title, m.image_url, m.images, m.created_at
+FROM public.marketplace_items m
+WHERE (m.image_url LIKE 'data:%'
+       OR EXISTS (SELECT 1 FROM unnest(m.images) AS img WHERE img LIKE 'data:%'))
+  AND NOT EXISTS (SELECT 1 FROM public._backup_20261024_marketplace_items_images b
+                  WHERE b.id = m.id
+                    AND b.image_url IS NOT DISTINCT FROM m.image_url
+                    AND b.images IS NOT DISTINCT FROM m.images);
+
 ALTER TABLE public._backup_20261024_posts_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public._backup_20261024_events_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public._backup_20261024_marketplace_items_images ENABLE ROW LEVEL SECURITY;
