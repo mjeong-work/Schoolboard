@@ -132,3 +132,17 @@ Production already has the Oct 24 batch under its old version numbers, plus `202
   - Remove (irreversible)
   - Interactions across a block
 - **Small bug**: after "Restore" without a note, the decision record still shows the previous decision's note. The audit history itself is correct.
+
+## Production rollout step 1 — applied 2026-11-22
+
+Run by Claude with the owner's approval, using the linked Supabase CLI (temporary CLI login role, no DB password). It ran in a temporary workdir that left out `20261122000000`, which must wait for the frontend deploy.
+
+1. `supabase migration list --linked`: the remote history was exactly the 17 versions verified earlier.
+2. `migration repair --status reverted` on the 4 old Oct 24 versions, then `--status applied` on `20260829000001`, `20260905000000..000002`, `20261120000000` and `20261121000000..000400`. This changed the history table only.
+3. `db push --dry-run` listed only `000500`, `000600` and `000700`. Then `db push` ran with no warnings.
+
+Verification:
+- History is aligned (26 rows). Only `20261122000000` is still pending in the repo.
+- With anon: 401 on every public table, including `reports`, `user_blocks` and `moderation_actions`. 401 on the new RPCs (`submit_report`, `block_author_of`, admin RPCs). Staging is also 401.
+- `inspect db table-stats`: the row estimates of the existing public tables and all staging tables are identical before and after.
+- `rollout_reporting.sql` / `apply_rollout.ps1` were not used. `rollback_reporting.sql` still applies: it removes the three history rows and the objects.
