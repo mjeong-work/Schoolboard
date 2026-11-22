@@ -83,7 +83,7 @@ export default function BlockedUsersPage() {
         {loading ? (
           <div className="py-12 text-center text-[#999] text-sm">Loading…</div>
         ) : notReady ? (
-          <BackendSetupNotice feature="Blocking" migrations={['20261121000500_reports_moderation.sql', '20261121000600_user_blocks.sql']} onRetry={load} />
+          <BackendSetupNotice audience="member" feature="Blocking" migrations={['20261121000500_reports_moderation.sql', '20261121000600_user_blocks.sql']} onRetry={load} />
         ) : loadError ? (
           <div className="py-10 text-center">
             <p className="text-sm text-[#dc2626] mb-3">{loadError}</p>

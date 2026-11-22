@@ -128,7 +128,9 @@ interface AdminReportsPanelProps {
 }
 
 export function AdminReportsPanel({ onCountsChange, onContentChanged }: AdminReportsPanelProps) {
-  const [filter, setFilter] = useState<ReportStatus | 'all'>('pending');
+  // "open" = pending + under review, so a case someone has started
+  // reviewing doesn't drop out of the default queue.
+  const [filter, setFilter] = useState<ReportStatus | 'all' | 'open'>('open');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -182,9 +184,14 @@ export function AdminReportsPanel({ onCountsChange, onContentChanged }: AdminRep
   useEffect(() => { if (!loading && !notReady && !loadError) onCountsChange?.(allCounts); }, [allCounts, loading, notReady, loadError, onCountsChange]);
 
   const groups = useMemo(
-    () => groupReports(filter === 'all' ? typedReports : typedReports.filter((r) => r.status === filter)),
+    () => groupReports(
+      filter === 'all' ? typedReports
+        : filter === 'open' ? typedReports.filter((r) => r.status === 'pending' || r.status === 'under_review')
+        : typedReports.filter((r) => r.status === filter),
+    ),
     [typedReports, filter],
   );
+  const shownReports = groups.reduce((n, g) => n + g.reports.length, 0);
 
   const selectedGroup = useMemo(() => {
     if (!selected) return null;
@@ -236,14 +243,14 @@ export function AdminReportsPanel({ onCountsChange, onContentChanged }: AdminRep
           return (
             <button
               key={c.value}
-              onClick={() => setFilter(active ? 'all' : c.value)}
+              onClick={() => setFilter(active ? 'open' : c.value)}
               aria-pressed={active}
               className={`text-left rounded-2xl border px-4 py-3 transition-colors ${
                 active ? 'border-black bg-black/[0.03]' : 'border-[#f0f0f0] hover:bg-[#fafafa]'
               }`}
             >
               <div className="text-2xl font-semibold" style={{ color: c.accent }}>
-                {loading && reports.length === 0 ? '—' : statusCounts[c.value]}
+                {(loading && reports.length === 0) || loadError ? '—' : statusCounts[c.value]}
               </div>
               <div className="text-xs text-[#666] mt-0.5">{c.label}</div>
             </button>
@@ -269,6 +276,15 @@ export function AdminReportsPanel({ onCountsChange, onContentChanged }: AdminRep
           );
         })}
         <span className="w-px h-4 bg-[#e5e5e5] mx-1 shrink-0" />
+        <button
+          onClick={() => setFilter('open')}
+          aria-pressed={filter === 'open'}
+          className={`shrink-0 rounded-full px-2.5 h-7 text-xs transition-colors ${
+            filter === 'open' ? 'bg-[#111]/[0.08] text-[#111] font-medium' : 'text-[#666] hover:bg-[#f5f5f5]'
+          }`}
+        >
+          Open
+        </button>
         <button
           onClick={() => setFilter('all')}
           aria-pressed={filter === 'all'}
@@ -300,15 +316,20 @@ export function AdminReportsPanel({ onCountsChange, onContentChanged }: AdminRep
         <div className="p-8 text-center text-[#666]">
           <Inbox className="w-12 h-12 mx-auto mb-3 text-[#c4c4c4]" />
           <p className="font-semibold text-[#111]">
-            No {filter === 'all' ? '' : STATUS_LABEL[filter].toLowerCase()} reports
+            No {filter === 'all' ? '' : filter === 'open' ? 'open' : STATUS_LABEL[filter].toLowerCase()} reports
             {typeFilter !== 'all' ? ` for ${TYPE_FILTERS.find((f) => f.value === typeFilter)?.label.toLowerCase()}` : ''}
           </p>
-          {filter === 'pending' && <p className="text-sm text-[#888] mt-1">Nothing is waiting for review.</p>}
+          {(filter === 'pending' || filter === 'open') && <p className="text-sm text-[#666] mt-1">Nothing is waiting for review.</p>}
         </div>
       ) : (
+        <>
+        <p className="text-xs text-[#666] mb-2">
+          {groups.length} {groups.length === 1 ? 'case' : 'cases'} · {shownReports} {shownReports === 1 ? 'report' : 'reports'}
+          <span className="text-[#888]"> — reports about the same item are grouped into one case</span>
+        </p>
         <div className="border border-[#f0f0f0] rounded-2xl overflow-hidden">
           {/* Column headers (desktop) */}
-          <div className="hidden md:grid grid-cols-[minmax(0,1fr)_150px_110px_110px_20px] gap-3 px-4 py-2 bg-[#fafafa] text-[11px] uppercase tracking-wide text-[#888]">
+          <div className="hidden md:grid grid-cols-[minmax(0,1fr)_150px_110px_110px_20px] gap-3 px-4 py-2 bg-[#fafafa] text-[11px] uppercase tracking-wide text-[#666]">
             <span>Reported content</span>
             <span>Reason</span>
             <span>Last reported</span>
@@ -345,7 +366,7 @@ export function AdminReportsPanel({ onCountsChange, onContentChanged }: AdminRep
                     <div className="flex items-center gap-2 mt-1.5 md:hidden text-xs text-[#666]">
                       <Badge className={`${STATUS_STYLE[g.status]} border-0 text-[11px]`}>{STATUS_LABEL[g.status]}</Badge>
                       <span className="truncate">{reasonSummary(g)}</span>
-                      <span className="ml-auto shrink-0 text-[#999]">{formatDateTime(g.latest.created_at)}</span>
+                      <span className="ml-auto shrink-0 text-[#666]">{formatDateTime(g.latest.created_at)}</span>
                     </div>
                     <span className="hidden md:block text-xs text-[#b91c1c] truncate">{reasonSummary(g)}</span>
                     <span className="hidden md:block text-xs text-[#666]">{formatDateTime(g.latest.created_at)}</span>
@@ -359,11 +380,18 @@ export function AdminReportsPanel({ onCountsChange, onContentChanged }: AdminRep
             })}
           </ul>
         </div>
+        </>
       )}
 
       {/* Detail view: the full case, its actions and its audit history */}
       <Sheet open={!!selectedGroup} onOpenChange={(open) => { if (!open) setSelected(null); }}>
-        <SheetContent side="right" className="w-full sm:max-w-xl p-0 gap-0 overflow-y-auto font-[Roboto]">
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-xl p-0 gap-0 overflow-y-auto font-[Roboto]"
+          // Focus the panel itself, not the first field: auto-focusing the
+          // note textarea popped the keyboard over the content on phones.
+          onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}
+        >
           {selectedGroup && (
             <>
               <div className="px-5 pt-5 pb-3 border-b border-[#f0f0f0]">
@@ -374,7 +402,7 @@ export function AdminReportsPanel({ onCountsChange, onContentChanged }: AdminRep
               </div>
               <div className="p-4">
                 <ReportCase
-                  key={selectedGroup.key}
+                  key={`${selectedGroup.targetType}:${selectedGroup.targetId}`}
                   group={selectedGroup}
                   onApplied={(ids, status, action, note) => {
                     applyLocally(ids, status, action, note);
@@ -458,6 +486,9 @@ interface ReportCaseProps {
   onApplied: (ids: string[], status: ReportStatus, action: ModerationAction, note: string) => void;
 }
 
+// Comfortable touch targets on phones; compact on desktop.
+const ACTION_BTN = 'w-full min-w-0 justify-center rounded-full gap-1.5 h-11 px-3 sm:h-8 disabled:opacity-35 [&>span]:truncate';
+
 function ReportCase({ group, onApplied }: ReportCaseProps) {
   const { latest, reports, status, targetId, targetType } = group;
   const noun = CONTENT_NOUN[targetType];
@@ -466,6 +497,16 @@ function ReportCase({ group, onApplied }: ReportCaseProps) {
   const [busy, setBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const busyRef = useRef(false);
+  // After a decision the buttons change meaning in place (Hide -> Restore),
+  // so a fast second click could undo or escalate it. Keep them disabled
+  // for a moment after each success.
+  const [coolingDown, setCoolingDown] = useState(false);
+  useEffect(() => {
+    if (!coolingDown) return;
+    const t = setTimeout(() => setCoolingDown(false), 900);
+    return () => clearTimeout(t);
+  }, [coolingDown]);
+  const locked = busy || coolingDown;
 
   const reasonCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -490,6 +531,7 @@ function ReportCase({ group, onApplied }: ReportCaseProps) {
     setBusy(true);
     try {
       await moderateReports(ids, nextStatus, action, note);
+      setCoolingDown(true);
       onApplied(ids, nextStatus, action, note);
       setNote('');
       toast.success(success);
@@ -566,15 +608,6 @@ function ReportCase({ group, onApplied }: ReportCaseProps) {
         </ul>
       )}
 
-      {/* Decision record */}
-      {!isOpen && (
-        <div className="text-xs text-[#555] bg-[#f9fafb] rounded-lg px-3 py-2 mb-3">
-          <span className="font-medium">{actionLabel(latest.action_taken, noun)}</span>
-          {' · '}reviewed {formatDateTime(latest.reviewed_at)}
-          {latest.moderator_note && <p className="mt-1 whitespace-pre-wrap break-words">Note: {latest.moderator_note}</p>}
-        </div>
-      )}
-
       {/* Actions */}
       <Textarea
         value={note}
@@ -583,43 +616,51 @@ function ReportCase({ group, onApplied }: ReportCaseProps) {
         disabled={busy}
         className="border-[#e5e7eb] rounded-lg min-h-[56px] text-sm mb-2"
       />
-      <div className="flex flex-wrap gap-2">
-        {status === 'pending' && (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => run('under_review', 'none', 'Marked as under review')} className="rounded-full gap-1.5">
-            <Search className="w-3.5 h-3.5" />Start review
+      {/* Fixed slots: every button keeps its position whatever the status, so
+          a decision never slides a different (possibly destructive) action
+          under the pointer. Inapplicable actions are disabled, not removed.
+          A grid (not flex-wrap) so a label change, e.g. "Start review" ->
+          "In review", can't shift the buttons after it either. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {isOpen ? (
+          <Button size="sm" variant="outline" disabled={locked || status !== 'pending'} onClick={() => run('under_review', 'none', 'Marked as under review')} className={ACTION_BTN}>
+            <Search className="w-3.5 h-3.5" />{status === 'pending' ? 'Start review' : 'In review'}
           </Button>
-        )}
-        {isOpen && latest.target_exists && !latest.target_hidden && (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => run('resolved', 'hide', `${actionLabel('hidden', noun)}, reports resolved`)} className="rounded-full gap-1.5">
-            <EyeOff className="w-3.5 h-3.5" />Hide {noun} &amp; resolve
-          </Button>
-        )}
-        {latest.target_exists && latest.target_hidden && (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => run(isOpen ? status : 'resolved', 'unhide', actionLabel('unhidden', noun))} className="rounded-full gap-1.5">
-            <Eye className="w-3.5 h-3.5" />Restore {noun}
-          </Button>
-        )}
-        {latest.target_exists && (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => setConfirmRemove(true)} className="rounded-full gap-1.5 text-[#dc2626] border-[#fecaca] hover:bg-[#fef2f2]">
-            <Trash2 className="w-3.5 h-3.5" />Remove {noun}
-          </Button>
-        )}
-        {isOpen && (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => run('resolved', 'none', 'Reports resolved')} className="rounded-full gap-1.5">
-            <CheckCircle className="w-3.5 h-3.5" />Resolve
-          </Button>
-        )}
-        {isOpen && (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => run('dismissed', 'none', 'Reports dismissed')} className="rounded-full gap-1.5">
-            <XCircle className="w-3.5 h-3.5" />Dismiss
-          </Button>
-        )}
-        {!isOpen && (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => run('under_review', 'none', 'Reopened for review')} className="rounded-full gap-1.5">
+        ) : (
+          <Button size="sm" variant="outline" disabled={locked} onClick={() => run('under_review', 'none', 'Reopened for review')} className={ACTION_BTN}>
             <Search className="w-3.5 h-3.5" />Reopen
           </Button>
         )}
+        {latest.target_hidden ? (
+          <Button size="sm" variant="outline" disabled={locked || !latest.target_exists} onClick={() => run(isOpen ? status : 'resolved', 'unhide', actionLabel('unhidden', noun))} className={ACTION_BTN}>
+            <Eye className="w-3.5 h-3.5" />Restore {noun}
+          </Button>
+        ) : (
+          <Button size="sm" variant="outline" disabled={locked || !isOpen || !latest.target_exists} onClick={() => run('resolved', 'hide', `${actionLabel('hidden', noun)}, reports resolved`)} className={ACTION_BTN}>
+            <EyeOff className="w-3.5 h-3.5" />Hide {noun} &amp; resolve
+          </Button>
+        )}
+        <Button size="sm" variant="outline" disabled={locked || !isOpen} onClick={() => run('resolved', 'none', 'Reports resolved')} className={ACTION_BTN}>
+          <CheckCircle className="w-3.5 h-3.5" />Resolve
+        </Button>
+        <Button size="sm" variant="outline" disabled={locked || !isOpen} onClick={() => run('dismissed', 'none', 'Reports dismissed')} className={ACTION_BTN}>
+          <XCircle className="w-3.5 h-3.5" />Dismiss
+        </Button>
+        {/* Destructive action last, set apart from the routine ones. */}
+        <Button size="sm" variant="outline" disabled={locked || !latest.target_exists} onClick={() => setConfirmRemove(true)} className={`${ACTION_BTN} col-span-2 sm:col-span-1 sm:col-start-3 text-[#dc2626] border-[#fecaca] hover:bg-[#fef2f2]`}>
+          <Trash2 className="w-3.5 h-3.5" />Remove {noun}
+        </Button>
       </div>
+
+      {/* Decision record — below the actions so it appearing after a
+          decision doesn't push the buttons down under the pointer. */}
+      {!isOpen && (
+        <div className="text-xs text-[#555] bg-[#f9fafb] rounded-lg px-3 py-2 mt-3">
+          <span className="font-medium">{actionLabel(latest.action_taken, noun)}</span>
+          {' · '}reviewed {formatDateTime(latest.reviewed_at)}
+          {latest.moderator_note && <p className="mt-1 whitespace-pre-wrap break-words">Note: {latest.moderator_note}</p>}
+        </div>
+      )}
 
       <ConfirmDeleteDialog
         open={confirmRemove}

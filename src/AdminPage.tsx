@@ -190,31 +190,22 @@ export default function AdminPage() {
       <NavigationBar activeTab="admin" />
 
       <main className="max-w-[960px] mx-auto px-4 sm:px-6 py-6">
-        <div className="mb-6">
+        <div className="mb-4">
           {/* Hidden on mobile — NavigationBar already shows "Admin" as the page
               title there. Desktop's nav doesn't show a title, so it keeps this
               heading. */}
           <h1 className="hidden md:block text-2xl font-bold font-[Bayon] mb-1">Admin Dashboard</h1>
-          <p className="text-[#666] text-sm font-[Roboto]">Reports, blocking, member approvals and content</p>
-        </div>
-
-        {/* Stats */}
-        <div className="flex items-stretch gap-2 mb-8">
-          {statCards.map(({ label, value, color, Icon }) => (
-            <div
-              key={label}
-              className="flex flex-col items-center justify-center gap-2 flex-1 px-2 py-4 border rounded-2xl bg-white hover:opacity-80 transition-all min-h-[130px]"
-              style={{ borderColor: color }}
-            >
-              <Icon className="w-6 h-6" style={{ color }} />
-              <div className="text-center">
-                <div className="text-2xl font-semibold text-[#111]">
-                  {loading ? '—' : value}
-                </div>
-                <div className="text-xs text-[#666] mt-1 font-[Roboto]">{label}</div>
-              </div>
-            </div>
-          ))}
+          {/* Platform totals as one compact line: they're context, not work,
+              and the big cards pushed the report queue below the fold. */}
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#666] font-[Roboto]" aria-label="Platform totals">
+            {statCards.map(({ label, value, color, Icon }) => (
+              <li key={label} className="flex items-center gap-1.5">
+                <Icon className="w-4 h-4" style={{ color }} aria-hidden />
+                <span className="font-semibold text-[#111]">{loading ? '—' : value}</span>
+                <span>{label.toLowerCase()}</span>
+              </li>
+            ))}
+          </ul>
         </div>
 
         {/* Tabs */}
