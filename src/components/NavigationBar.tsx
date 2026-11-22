@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from './ui/sheet';
 import { useAuth } from '../utils/authContext';
 import { useChat } from '../utils/chatContext';
+import { PolicyFootnote } from '../policies/PolicyLinks';
 
 interface NavigationBarProps {
   activeTab?: 'community' | 'events' | 'marketplace' | 'admin' | 'profile' | 'messages';
@@ -166,6 +167,7 @@ export function NavigationBar({ activeTab = 'community' }: NavigationBarProps) {
                   <span>Logout</span>
                 </button>
               </div>
+              <PolicyFootnote className="mt-auto px-4 pb-6" />
             </SheetContent>
           </Sheet>
         </div>

@@ -304,13 +304,15 @@ export function CreateEventDialog({ open, onOpenChange, onSubmit }: CreateEventD
               </div>
 
               <p className="text-xs text-[#999] pt-2 pb-4">
-                By continuing, you agree with the Campus Connect{' '}
-                <span
-                  className="underline cursor-pointer hover:text-[#666]"
-                  onClick={() => toast('Event policies are coming soon.')}
+                By continuing, you agree to follow our{' '}
+                <a
+                  href="/community-guidelines"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-[#666]"
                 >
-                  Event Policies
-                </span>
+                  Community Guidelines
+                </a>
                 .
               </p>
             </div>

@@ -13,6 +13,7 @@ import { supabase } from './utils/supabaseClient';
 import { compressImage } from './utils/imageCompression';
 import { validateImageFile, assertUploadsAllowed, ImageUploadError, IMAGE_UPLOAD_CONFIGS } from './utils/imageUpload';
 import { toast } from 'sonner@2.0.3';
+import { PolicyLinkList } from './policies/PolicyLinks';
 
 const BIO_MAX_LENGTH = 240;
 
@@ -290,6 +291,12 @@ export default function EditProfilePage() {
               </span>
               <ChevronRight className="w-4 h-4 text-[#999] shrink-0" />
             </a>
+          </Card>
+
+          {/* Legal & policies */}
+          <Card className="p-6 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px]">
+            <h2 className="text-[#111] mb-1 font-[Roboto] font-bold">Legal &amp; policies</h2>
+            <PolicyLinkList />
           </Card>
         </div>
       </main>
