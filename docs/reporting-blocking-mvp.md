@@ -18,6 +18,7 @@ Builds on `docs/week1-reporting-blocking-spec.md`. It replaces the posts-only pl
 |---|---|
 | DB (files only, **not applied**) | `20261121000500_reports_moderation.sql`: `reports` and `moderation_actions` tables; `hidden_at` and a RESTRICTIVE hide policy on 6 content tables; a trigger so only admins change `hidden_at`; RPCs `submit_report`, `admin_list_reports`, `admin_moderate_reports` |
 | | `20261121000600_user_blocks.sql`: `user_blocks` table; RESTRICTIVE visibility and interaction policies; RPCs `block_author_of`, `list_my_blocks`, `unblock` |
+| | `20261121000700_admin_dashboard.sql`: read-only admin RPCs `admin_report_counts`, `admin_list_moderation_actions` (returns `by_me`, never admin ids) and `admin_block_stats` (aggregates only) |
 | Client API | `src/utils/reports.ts` (generalized), `src/utils/blocks.ts` |
 | Reporter / blocker UI | `ReportDialog` (generalized from `ReportPostDialog`) and the `useContentSafety` hook (`ContentSafety.tsx`), wired into post, listing (card and mobile detail page) and event menus, and into comment menus on all three |
 | Settings | `BlockedUsersPage` (`#/blocked-users`), linked from Edit profile → Privacy & safety |
@@ -108,7 +109,7 @@ Client behaviour:
    ```sh
    supabase db push   # against staging, after confirming `supabase migration list`
    ```
-   The batch `20261121000000..000600` must go in order. `000300` nulls base64 image columns; it backs them up to `_backup_20261024_*` first.
+   The batch `20261121000000..000700` must go in order. `000300` nulls base64 image columns; it backs them up to `_backup_20261024_*` first.
 3. Check for `WARNING` lines in the output. The migrations warn if RLS is disabled on any table they rely on: `posts`, `post_comments` and `post_likes` were created outside the migrations folder.
 4. Confirm that deleting a post cascades to its likes and comments. Remove uses a plain `DELETE`, the same as the existing admin delete.
 5. Run the manual checklist below with User A, User B and an Admin on staging.
@@ -119,7 +120,7 @@ Client behaviour:
 **Automated (real Postgres 17, stubbed Supabase):** run `PGPORT=<port> sh supabase/tests/run_local.sh`.
 - Applies all 24 migrations in order on an empty database.
 - Runs 88 scenarios as User A, User B, User C, Admin and `anon`.
-- Re-applying `000500` and `000600` is idempotent.
+- Re-applying `000500`, `000600` and `000700` is idempotent.
 - Coverage:
   - Reporting: create, duplicate, validation, own content, all 6 types, rate limit.
   - Access control: direct table access denied, non-admin list/moderate denied, `anon` denied, internal helpers not callable.
@@ -156,3 +157,14 @@ Client behaviour:
   - Deep links (`#/admin`, `#/blocked-users`) fall back to Community on a cold reload. This router behaviour predates this branch.
   - The Reports tab count appears only after the tab has been opened once.
   - "Save event" and "Share event" menu items still do nothing. This predates this branch.
+
+## Admin dashboard (local main, 2026-11-21)
+
+`#/admin` opens on **Reports**. Tabs have their own URLs (`#/admin/reports`, `#/admin/blocking`, `#/admin/approvals`, `#/admin/posts`, `#/admin/listings`) and survive a refresh. The router now waits for the session to be restored before redirecting.
+
+- **Reports**:
+  - Status summary cards (they double as a filter) and content-type filters.
+  - A table showing type, preview, reason, last report date and status; it stacks on mobile.
+  - Clicking a case opens a detail sheet with the existing actions (Review, Hide, Restore, Remove, Resolve, Dismiss, Reopen, plus a note) and the audit history.
+- **Blocking**: aggregate statistics only. It shows "needs attention" counts (accounts blocked by 3 or more people, blocked accounts with open reports) and the policy, and never shows who blocked whom.
+- **Setup state**: until the migrations are applied, every reporting/blocking screen explains which migration files are missing instead of showing a generic error.

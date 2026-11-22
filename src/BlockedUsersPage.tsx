@@ -6,7 +6,8 @@ import { Button } from './components/ui/button';
 import { getAvatarColor } from './utils/anonymousName';
 import { useData } from './utils/dataContext';
 import { listMyBlocks, unblock, type BlockedUser } from './utils/blocks';
-import { CONTENT_NOUN } from './utils/reports';
+import { BackendNotReadyError, CONTENT_NOUN } from './utils/reports';
+import { BackendSetupNotice } from './components/BackendSetupNotice';
 
 function formatBlockedDate(value: string) {
   return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -22,6 +23,7 @@ export default function BlockedUsersPage() {
   const [blocks, setBlocks] = useState<BlockedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [notReady, setNotReady] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const pendingRef = useRef(false);
 
@@ -30,8 +32,10 @@ export default function BlockedUsersPage() {
     setLoadError(null);
     try {
       setBlocks(await listMyBlocks());
+      setNotReady(false);
     } catch (err: any) {
-      setLoadError(err?.message || 'Couldn’t load your blocked accounts.');
+      if (err instanceof BackendNotReadyError) setNotReady(true);
+      else setLoadError(err?.message || 'Couldn’t load your blocked accounts.');
     } finally {
       setLoading(false);
     }
@@ -78,6 +82,8 @@ export default function BlockedUsersPage() {
 
         {loading ? (
           <div className="py-12 text-center text-[#999] text-sm">Loading…</div>
+        ) : notReady ? (
+          <BackendSetupNotice feature="Blocking" migrations={['20261121000500_reports_moderation.sql', '20261121000600_user_blocks.sql']} onRetry={load} />
         ) : loadError ? (
           <div className="py-10 text-center">
             <p className="text-sm text-[#dc2626] mb-3">{loadError}</p>

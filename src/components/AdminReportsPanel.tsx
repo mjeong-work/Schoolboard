@@ -1,31 +1,48 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Flag, EyeOff, Eye, Trash2, CheckCircle, XCircle, Search, RefreshCw } from 'lucide-react';
+import { Flag, EyeOff, Eye, Trash2, CheckCircle, XCircle, Search, RefreshCw, ChevronRight, History, Inbox } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Textarea } from './ui/textarea';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
+import { BackendSetupNotice } from './BackendSetupNotice';
 import { getAnonymousName } from '../utils/anonymousName';
 import {
   listReports,
+  listModerationHistory,
   moderateReports,
   reportReasonLabel,
+  BackendNotReadyError,
   CONTENT_AREA,
   CONTENT_NOUN,
   MODERATOR_NOTE_MAX_LENGTH,
   type AdminReport,
   type ContentType,
   type ModerationAction,
+  type ModerationHistoryEntry,
   type ReportStatus,
 } from '../utils/reports';
 
-const STATUS_FILTERS: { value: ReportStatus | 'all'; label: string }[] = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'under_review', label: 'Under review' },
-  { value: 'resolved', label: 'Resolved' },
-  { value: 'dismissed', label: 'Dismissed' },
-  { value: 'all', label: 'All' },
+export const REPORT_MIGRATIONS = [
+  '20261121000500_reports_moderation.sql',
+  '20261121000600_user_blocks.sql',
+  '20261121000700_admin_dashboard.sql',
 ];
+
+const STATUS_CARDS: { value: ReportStatus; label: string; accent: string }[] = [
+  { value: 'pending', label: 'Pending', accent: '#d97706' },
+  { value: 'under_review', label: 'Under review', accent: '#4338ca' },
+  { value: 'resolved', label: 'Resolved', accent: '#047857' },
+  { value: 'dismissed', label: 'Dismissed', accent: '#6b7280' },
+];
+
+const STATUS_LABEL: Record<ReportStatus, string> = {
+  pending: 'Pending',
+  under_review: 'Under review',
+  resolved: 'Resolved',
+  dismissed: 'Dismissed',
+};
 
 type TypeFilter = 'all' | 'posts' | 'comments' | 'listings' | 'events';
 
@@ -89,19 +106,38 @@ function formatDateTime(value: string | null) {
   });
 }
 
+/** One-line preview of what was reported (live content, else the snapshot). */
+function previewOf(group: ReportGroup) {
+  const c = group.latest.live_content ?? group.latest.content_snapshot;
+  const title = c.title && c.title !== c.content ? c.title : null;
+  return { title, body: c.content ?? '' };
+}
+
+function reasonSummary(group: ReportGroup) {
+  const counts = new Map<string, number>();
+  group.reports.forEach((r) => counts.set(r.reason, (counts.get(r.reason) ?? 0) + 1));
+  const [top, ...rest] = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  return rest.length ? `${reportReasonLabel(top[0])} +${rest.length}` : reportReasonLabel(top[0]);
+}
+
 interface AdminReportsPanelProps {
-  /** Reports pending review, for the tab label. */
-  onPendingCountChange?: (count: number) => void;
+  /** Status totals from the loaded queue, for the page's tab badge. */
+  onCountsChange?: (counts: Record<ReportStatus, number>) => void;
   /** Content was hidden/restored/removed — lets the page refresh its own lists. */
   onContentChanged?: (type: ContentType) => void;
 }
 
-export function AdminReportsPanel({ onPendingCountChange, onContentChanged }: AdminReportsPanelProps) {
+export function AdminReportsPanel({ onCountsChange, onContentChanged }: AdminReportsPanelProps) {
   const [filter, setFilter] = useState<ReportStatus | 'all'>('pending');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [notReady, setNotReady] = useState(false);
+  // The open case, tracked by content + status so it follows a decision
+  // (e.g. pending -> resolved) instead of disappearing from the sheet.
+  const [selected, setSelected] = useState<{ type: ContentType; id: string; status: ReportStatus } | null>(null);
+  const [historyVersion, setHistoryVersion] = useState(0);
   const loadSeq = useRef(0);
 
   const load = useCallback(async () => {
@@ -109,14 +145,16 @@ export function AdminReportsPanel({ onPendingCountChange, onContentChanged }: Ad
     setLoading(true);
     setLoadError(null);
     try {
-      // Always fetch everything: the pending count needs it, and the list
-      // is capped server-side.
+      // Always fetch everything: the counts need it, and the list is
+      // capped server-side.
       const data = await listReports();
       if (seq !== loadSeq.current) return; // a newer load superseded this one
       setReports(data);
+      setNotReady(false);
     } catch (err: any) {
       if (seq !== loadSeq.current) return;
-      setLoadError(err?.message || 'Couldn’t load reports.');
+      if (err instanceof BackendNotReadyError) setNotReady(true);
+      else setLoadError(err?.message || 'Couldn’t load reports.');
     } finally {
       if (seq === loadSeq.current) setLoading(false);
     }
@@ -124,19 +162,36 @@ export function AdminReportsPanel({ onPendingCountChange, onContentChanged }: Ad
 
   useEffect(() => { load(); }, [load]);
 
-  const pendingCount = useMemo(() => reports.filter((r) => r.status === 'pending').length, [reports]);
-  useEffect(() => { onPendingCountChange?.(pendingCount); }, [pendingCount, onPendingCountChange]);
-
-  // Reports matching the content-type filter; the status chips count within it.
+  // Reports matching the content-type filter; the status cards count within it.
   const typedReports = useMemo(() => {
     const types = TYPE_FILTERS.find((f) => f.value === typeFilter)?.types ?? [];
     return types.length === 0 ? reports : reports.filter((r) => types.includes(r.target_type));
   }, [reports, typeFilter]);
 
+  const statusCounts = useMemo(() => {
+    const counts: Record<ReportStatus, number> = { pending: 0, under_review: 0, resolved: 0, dismissed: 0 };
+    typedReports.forEach((r) => { counts[r.status] += 1; });
+    return counts;
+  }, [typedReports]);
+
+  const allCounts = useMemo(() => {
+    const counts: Record<ReportStatus, number> = { pending: 0, under_review: 0, resolved: 0, dismissed: 0 };
+    reports.forEach((r) => { counts[r.status] += 1; });
+    return counts;
+  }, [reports]);
+  useEffect(() => { if (!loading && !notReady && !loadError) onCountsChange?.(allCounts); }, [allCounts, loading, notReady, loadError, onCountsChange]);
+
   const groups = useMemo(
     () => groupReports(filter === 'all' ? typedReports : typedReports.filter((r) => r.status === filter)),
     [typedReports, filter],
   );
+
+  const selectedGroup = useMemo(() => {
+    if (!selected) return null;
+    return groupReports(reports).find(
+      (g) => g.targetType === selected.type && g.targetId === selected.id && g.status === selected.status,
+    ) ?? null;
+  }, [reports, selected]);
 
   // Applies a decision locally from the server's confirmed success instead
   // of re-downloading the whole queue.
@@ -168,10 +223,36 @@ export function AdminReportsPanel({ onPendingCountChange, onContentChanged }: Ad
     });
   };
 
+  if (notReady) {
+    return <BackendSetupNotice feature="Reporting" migrations={REPORT_MIGRATIONS} onRetry={load} />;
+  }
+
   return (
     <div className="font-[Roboto]">
-      {/* Content-type filter */}
-      <div className="flex items-center gap-1.5 mb-2 overflow-x-auto pb-1 -mx-1 px-1">
+      {/* Summary cards double as the status filter */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+        {STATUS_CARDS.map((c) => {
+          const active = filter === c.value;
+          return (
+            <button
+              key={c.value}
+              onClick={() => setFilter(active ? 'all' : c.value)}
+              aria-pressed={active}
+              className={`text-left rounded-2xl border px-4 py-3 transition-colors ${
+                active ? 'border-black bg-black/[0.03]' : 'border-[#f0f0f0] hover:bg-[#fafafa]'
+              }`}
+            >
+              <div className="text-2xl font-semibold" style={{ color: c.accent }}>
+                {loading && reports.length === 0 ? '—' : statusCounts[c.value]}
+              </div>
+              <div className="text-xs text-[#666] mt-0.5">{c.label}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Content-type filter + status reset + refresh */}
+      <div className="flex items-center gap-1.5 mb-3 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TYPE_FILTERS.map((f) => {
           const active = typeFilter === f.value;
           return (
@@ -187,26 +268,16 @@ export function AdminReportsPanel({ onPendingCountChange, onContentChanged }: Ad
             </button>
           );
         })}
-      </div>
-
-      {/* Status filter */}
-      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 -mx-1 px-1">
-        {STATUS_FILTERS.map((f) => {
-          const count = f.value === 'all' ? typedReports.length : typedReports.filter((r) => r.status === f.value).length;
-          const active = filter === f.value;
-          return (
-            <button
-              key={f.value}
-              onClick={() => setFilter(f.value)}
-              className={`shrink-0 rounded-full border px-3 h-8 text-sm transition-colors ${
-                active ? 'bg-black text-white border-black' : 'bg-white text-[#444] border-[#e5e5e5] hover:bg-[#f5f5f5]'
-              }`}
-            >
-              {f.label}
-              {!loading && <span className={`ml-1.5 ${active ? 'text-white/70' : 'text-[#999]'}`}>{count}</span>}
-            </button>
-          );
-        })}
+        <span className="w-px h-4 bg-[#e5e5e5] mx-1 shrink-0" />
+        <button
+          onClick={() => setFilter('all')}
+          aria-pressed={filter === 'all'}
+          className={`shrink-0 rounded-full px-2.5 h-7 text-xs transition-colors ${
+            filter === 'all' ? 'bg-[#111]/[0.08] text-[#111] font-medium' : 'text-[#666] hover:bg-[#f5f5f5]'
+          }`}
+        >
+          All statuses
+        </button>
         <button
           onClick={load}
           disabled={loading}
@@ -219,7 +290,7 @@ export function AdminReportsPanel({ onPendingCountChange, onContentChanged }: Ad
       </div>
 
       {loading && reports.length === 0 ? (
-        <div className="py-12 text-center text-[#999] text-sm">Loading…</div>
+        <div className="py-12 text-center text-[#999] text-sm">Loading reports…</div>
       ) : loadError ? (
         <div className="py-10 text-center">
           <p className="text-sm text-[#dc2626] mb-3">{loadError}</p>
@@ -227,24 +298,158 @@ export function AdminReportsPanel({ onPendingCountChange, onContentChanged }: Ad
         </div>
       ) : groups.length === 0 ? (
         <div className="p-8 text-center text-[#666]">
-          <Flag className="w-12 h-12 mx-auto mb-3 text-[#999]" />
-          <p className="font-semibold">No {filter === 'all' ? '' : STATUS_FILTERS.find((f) => f.value === filter)?.label.toLowerCase()} reports</p>
+          <Inbox className="w-12 h-12 mx-auto mb-3 text-[#c4c4c4]" />
+          <p className="font-semibold text-[#111]">
+            No {filter === 'all' ? '' : STATUS_LABEL[filter].toLowerCase()} reports
+            {typeFilter !== 'all' ? ` for ${TYPE_FILTERS.find((f) => f.value === typeFilter)?.label.toLowerCase()}` : ''}
+          </p>
+          {filter === 'pending' && <p className="text-sm text-[#888] mt-1">Nothing is waiting for review.</p>}
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {groups.map((g) => (
-            <ReportCase
-              key={g.key}
-              group={g}
-              onApplied={(ids, status, action, note) => {
-                applyLocally(ids, status, action, note);
-                if (action !== 'none') onContentChanged?.(g.targetType);
-              }}
-            />
-          ))}
+        <div className="border border-[#f0f0f0] rounded-2xl overflow-hidden">
+          {/* Column headers (desktop) */}
+          <div className="hidden md:grid grid-cols-[minmax(0,1fr)_150px_110px_110px_20px] gap-3 px-4 py-2 bg-[#fafafa] text-[11px] uppercase tracking-wide text-[#888]">
+            <span>Reported content</span>
+            <span>Reason</span>
+            <span>Last reported</span>
+            <span>Status</span>
+            <span />
+          </div>
+          <ul className="divide-y divide-[#f0f0f0]">
+            {groups.map((g) => {
+              const { title, body } = previewOf(g);
+              return (
+                <li key={g.key}>
+                  <button
+                    onClick={() => setSelected({ type: g.targetType, id: g.targetId, status: g.status })}
+                    className="w-full text-left px-4 py-3 hover:bg-[#fafafa] transition-colors md:grid md:grid-cols-[minmax(0,1fr)_150px_110px_110px_20px] md:gap-3 md:items-center"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                        <span className="text-[11px] text-[#666] bg-[#f3f4f6] rounded-full px-2 py-0.5">{CONTENT_AREA[g.targetType]}</span>
+                        {g.reports.length > 1 && (
+                          <span className="text-[11px] font-semibold text-[#b91c1c]">{g.reports.length} reports</span>
+                        )}
+                        {!g.latest.target_exists ? (
+                          <span className="text-[11px] text-[#dc2626]">Removed</span>
+                        ) : g.latest.target_hidden ? (
+                          <span className="text-[11px] text-[#b45309]">Hidden</span>
+                        ) : null}
+                      </div>
+                      <p className="text-sm text-[#111] truncate">
+                        {title && <span className="font-semibold">{title} · </span>}
+                        <span className="text-[#444]">{body}</span>
+                      </p>
+                    </div>
+                    {/* Mobile: compact meta line; desktop: columns */}
+                    <div className="flex items-center gap-2 mt-1.5 md:hidden text-xs text-[#666]">
+                      <Badge className={`${STATUS_STYLE[g.status]} border-0 text-[11px]`}>{STATUS_LABEL[g.status]}</Badge>
+                      <span className="truncate">{reasonSummary(g)}</span>
+                      <span className="ml-auto shrink-0 text-[#999]">{formatDateTime(g.latest.created_at)}</span>
+                    </div>
+                    <span className="hidden md:block text-xs text-[#b91c1c] truncate">{reasonSummary(g)}</span>
+                    <span className="hidden md:block text-xs text-[#666]">{formatDateTime(g.latest.created_at)}</span>
+                    <span className="hidden md:block">
+                      <Badge className={`${STATUS_STYLE[g.status]} border-0 text-[11px]`}>{STATUS_LABEL[g.status]}</Badge>
+                    </span>
+                    <ChevronRight className="hidden md:block w-4 h-4 text-[#bbb]" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
+
+      {/* Detail view: the full case, its actions and its audit history */}
+      <Sheet open={!!selectedGroup} onOpenChange={(open) => { if (!open) setSelected(null); }}>
+        <SheetContent side="right" className="w-full sm:max-w-xl p-0 gap-0 overflow-y-auto font-[Roboto]">
+          {selectedGroup && (
+            <>
+              <div className="px-5 pt-5 pb-3 border-b border-[#f0f0f0]">
+                <SheetTitle className="text-[#111]">Report details</SheetTitle>
+                <SheetDescription className="text-xs">
+                  {CONTENT_AREA[selectedGroup.targetType]} · shown by alias only — use Reveal on the Posts/Listings tabs only when escalation requires it.
+                </SheetDescription>
+              </div>
+              <div className="p-4">
+                <ReportCase
+                  key={selectedGroup.key}
+                  group={selectedGroup}
+                  onApplied={(ids, status, action, note) => {
+                    applyLocally(ids, status, action, note);
+                    setSelected({ type: selectedGroup.targetType, id: selectedGroup.targetId, status });
+                    setHistoryVersion((v) => v + 1);
+                    if (action !== 'none') onContentChanged?.(selectedGroup.targetType);
+                  }}
+                />
+                <ModerationHistory
+                  targetType={selectedGroup.targetType}
+                  targetId={selectedGroup.targetId}
+                  version={historyVersion}
+                />
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
+  );
+}
+
+const HISTORY_ACTION_LABEL: Record<string, string> = {
+  none: 'Status change',
+  hide: 'Hid content',
+  unhide: 'Restored content',
+  remove: 'Removed content',
+};
+
+function ModerationHistory({ targetType, targetId, version }: { targetType: ContentType; targetId: string; version: number }) {
+  const [entries, setEntries] = useState<ModerationHistoryEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    listModerationHistory(targetType, targetId)
+      .then((rows) => { if (!cancelled) setEntries(rows); })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof BackendNotReadyError
+          ? 'Audit history needs migration 20261121000700_admin_dashboard.sql.'
+          : err?.message || 'Couldn’t load the moderation history.');
+      });
+    return () => { cancelled = true; };
+  }, [targetType, targetId, version]);
+
+  return (
+    <section className="mt-5">
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold text-[#111] mb-2">
+        <History className="w-4 h-4" />
+        Audit history
+      </h3>
+      {error ? (
+        <p className="text-xs text-[#888]">{error}</p>
+      ) : entries === null ? (
+        <p className="text-xs text-[#999]">Loading…</p>
+      ) : entries.length === 0 ? (
+        <p className="text-xs text-[#888]">No decisions recorded yet.</p>
+      ) : (
+        <ol className="border-l border-[#e5e5e5] ml-1.5 space-y-3">
+          {entries.map((e) => (
+            <li key={e.id} className="pl-3 relative">
+              <span className="absolute -left-[4.5px] top-1.5 w-2 h-2 rounded-full bg-[#d4d4d8]" />
+              <p className="text-xs text-[#111]">
+                <span className="font-medium">{HISTORY_ACTION_LABEL[e.action] ?? e.action}</span>
+                {e.status && <> → {STATUS_LABEL[e.status as ReportStatus] ?? e.status}</>}
+                <span className="text-[#888]"> · {e.by_me ? 'you' : 'another admin'} · {formatDateTime(e.created_at)}</span>
+              </p>
+              {e.note && <p className="text-xs text-[#555] mt-0.5 whitespace-pre-wrap break-words">“{e.note}”</p>}
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }
 

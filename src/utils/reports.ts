@@ -70,12 +70,28 @@ const ERROR_COPY: Record<string, string> = {
   reports_must_share_one_target: 'Those reports are about different content. Refresh and try again.',
 };
 
+/**
+ * The RPC (or table) doesn't exist in the connected database — the
+ * reporting/blocking migrations haven't been applied there yet. The UI
+ * shows a setup state for this instead of a generic failure.
+ */
+export class BackendNotReadyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BackendNotReadyError';
+  }
+}
+
+/** PGRST202: function not in the schema cache; 42883: undefined function; PGRST205: table missing. */
+export function isMissingBackend(error: { code?: string }) {
+  return error.code === 'PGRST202' || error.code === '42883' || error.code === 'PGRST205';
+}
+
 function toFriendlyError(error: { message?: string; code?: string }, fallback: string) {
   const code = error.message ?? '';
   if (ERROR_COPY[code]) return new Error(ERROR_COPY[code]);
-  // PGRST202: function not found — the migration hasn't been applied.
-  if (error.code === 'PGRST202' || error.code === '42883') {
-    return new Error('Reporting isn’t set up on the server yet.');
+  if (isMissingBackend(error)) {
+    return new BackendNotReadyError('Reporting isn’t set up on the server yet.');
   }
   return new Error(fallback);
 }
@@ -159,4 +175,47 @@ export async function moderateReports(
     console.error('[moderateReports]', error);
     throw toFriendlyError(error, 'Couldn’t save that decision. Please try again.');
   }
+}
+
+export type ReportCounts = Record<ReportStatus, number> & { byType: Partial<Record<ContentType, number>> };
+
+/** Status totals (and open reports per content type) without loading the queue. */
+export async function fetchReportCounts(): Promise<ReportCounts> {
+  const { data, error } = await supabase.rpc('admin_report_counts');
+  if (error) {
+    console.error('[fetchReportCounts]', error);
+    throw toFriendlyError(error, 'Couldn’t load report counts.');
+  }
+  const counts: ReportCounts = { pending: 0, under_review: 0, resolved: 0, dismissed: 0, byType: {} };
+  for (const row of (data ?? []) as { status: ReportStatus; target_type: ContentType; report_count: number }[]) {
+    const n = Number(row.report_count) || 0;
+    counts[row.status] = (counts[row.status] ?? 0) + n;
+    if (row.status === 'pending' || row.status === 'under_review') {
+      counts.byType[row.target_type] = (counts.byType[row.target_type] ?? 0) + n;
+    }
+  }
+  return counts;
+}
+
+/** One moderation decision on a piece of content. No admin ids — just "you" or "another admin". */
+export interface ModerationHistoryEntry {
+  id: string;
+  action: ModerationAction;
+  status: ReportStatus | null;
+  note: string | null;
+  report_count: number;
+  created_at: string;
+  by_me: boolean;
+}
+
+export async function listModerationHistory(targetType: ContentType, targetId: string): Promise<ModerationHistoryEntry[]> {
+  const { data, error } = await supabase.rpc('admin_list_moderation_actions', {
+    p_target_type: targetType,
+    p_target_id: targetId,
+  });
+  if (error) {
+    console.error('[listModerationHistory]', error);
+    throw toFriendlyError(error, 'Couldn’t load the moderation history.');
+  }
+  return (data ?? []) as ModerationHistoryEntry[];
 }

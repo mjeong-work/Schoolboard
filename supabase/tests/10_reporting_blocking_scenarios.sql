@@ -201,6 +201,26 @@ SELECT t_ok((SELECT count(DISTINCT author_id) FROM posts) = 2, 'C still sees bot
 SELECT set_config('request.jwt.claim.sub', 'dddddddd-0000-0000-0000-000000000004', false);
 SELECT t_ok((SELECT count(*) FROM post_comments) = 2, 'admin sees all comments');
 
+\echo '=== Admin dashboard RPCs (20261121000700) ==='
+SELECT t_ok((SELECT sum(report_count) FROM admin_report_counts()) = (SELECT count(*) FROM admin_list_reports()), 'report counts add up to the queue');
+SELECT t_ok((SELECT report_count FROM admin_report_counts() WHERE status = 'dismissed' AND target_type = 'event') = 1, 'counts are grouped by status and type');
+SELECT t_ok((SELECT count(*) FROM admin_list_moderation_actions('post', '10000000-0000-0000-0000-00000000000b')) = 2, 'post history has review + hide');
+SELECT t_ok((SELECT bool_and(by_me) FROM admin_list_moderation_actions('post', '10000000-0000-0000-0000-00000000000b')), 'history marks own decisions as by_me');
+SELECT t_ok((SELECT note FROM admin_list_moderation_actions('post', '10000000-0000-0000-0000-00000000000b') WHERE action = 'hide') = 'spam link', 'history keeps decision notes');
+SELECT t_ok(NOT EXISTS (SELECT 1 FROM admin_list_moderation_actions('post', '10000000-0000-0000-0000-00000000000b') h WHERE h::text ILIKE '%dddddddd%'), 'history exposes no admin id');
+SELECT t_ok((SELECT total_blocks = 1 AND accounts_blocking = 1 AND accounts_blocked = 1 AND accounts_blocked_by_3_plus = 0 FROM admin_block_stats()), 'block stats are aggregate counts');
+SELECT t_ok((SELECT (by_source->>'post_comment')::int = 1 FROM admin_block_stats()), 'block stats break down by source');
+SELECT t_ok(NOT EXISTS (SELECT 1 FROM admin_block_stats() s WHERE s::text ~* '(aaaaaaaa|bbbbbbbb|Brave Otter)'), 'block stats expose no ids or aliases');
+SELECT set_config('request.jwt.claim.sub', 'cccccccc-0000-0000-0000-000000000003', false);
+SELECT t_err($$SELECT * FROM admin_report_counts()$$, 'forbidden', 'non-admin cannot read report counts');
+SELECT t_err($$SELECT * FROM admin_list_moderation_actions('post', gen_random_uuid())$$, 'forbidden', 'non-admin cannot read audit history');
+SELECT t_err($$SELECT * FROM admin_block_stats()$$, 'forbidden', 'non-admin cannot read block stats');
+RESET ROLE;
+SET ROLE anon;
+SELECT t_err($$SELECT * FROM admin_block_stats()$$, 'permission denied', 'anon cannot read block stats');
+RESET ROLE;
+SET ROLE authenticated;
+
 \echo '=== Unblock ==='
 SELECT set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-0000-0000-000000000001', false);
 SELECT t_ok(unblock(:'a_block_id'), 'A unblocks B');

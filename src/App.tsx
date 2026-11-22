@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { AuthProvider, useAuth } from "./utils/authContext";
 import { DataProvider } from "./utils/dataContext";
 import { ChatProvider } from "./utils/chatContext";
@@ -51,7 +51,7 @@ type PageType =
   | "reset-password";
 
 function AppRouter() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, authReady } = useAuth();
   const [currentPage, setCurrentPage] = useState<PageType>("login");
   // Sticky flag: recovering the password establishes a temporary session,
   // which flips isAuthenticated to true and would otherwise make the routing
@@ -59,11 +59,15 @@ function AppRouter() {
   // before the user gets to set a new password. Once set, this only clears
   // when the user explicitly leaves (e.g. "Go to Sign In" -> #/login).
   const [isRecovering, setIsRecovering] = useState(false);
+  // Where a signed-out visit was headed, so it can continue there after login.
+  const pendingRoute = useRef<string | null>(null);
 
   useEffect(() => {
     const handleHashChange = () => {
       const rawHash = window.location.hash;
-      const hash = rawHash.slice(1).replace("/", "");
+      // "#/admin/reports" -> route "admin" (pages read their own sub-path).
+      const fullPath = rawHash.slice(1).replace(/^\//, "");
+      const hash = fullPath.split("/")[0];
       const recoveryArtifact = rawHash.includes("type=recovery");
 
       // Supabase clears the "#access_token=...&type=recovery" fragment via
@@ -97,10 +101,24 @@ function AppRouter() {
         return;
       }
 
+      // Session still being restored: don't redirect yet, or every
+      // refresh/bookmark would be rewritten to #/login and then land on
+      // Community once the session arrives.
+      if (!authReady) return;
+
       // Check if user is authenticated
       if (!isAuthenticated) {
+        if (hash && hash !== "login" && hash !== "community") pendingRoute.current = fullPath;
         setCurrentPage("login");
         window.location.hash = "#/login";
+        return;
+      }
+
+      // Just signed in from a redirect: continue to where the visit was headed.
+      if (hash === "login" && pendingRoute.current) {
+        const target = pendingRoute.current;
+        pendingRoute.current = null;
+        window.location.hash = `#/${target}`;
         return;
       }
 
@@ -155,11 +173,13 @@ function AppRouter() {
 
     return () =>
       window.removeEventListener("hashchange", handleHashChange);
-  }, [isAuthenticated, user, isRecovering]);
+  }, [isAuthenticated, authReady, user, isRecovering]);
 
   // Render appropriate page
   if (currentPage === "login") {
-    return <LoginPage />;
+    // Neutral screen while a stored session is restored, instead of a
+    // flash of the login form for people who are already signed in.
+    return authReady ? <LoginPage /> : <PageLoadingFallback />;
   }
 
   if (currentPage === "register") {

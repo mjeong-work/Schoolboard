@@ -23,6 +23,8 @@ interface AuthContextType {
   user: User | null;
   currentUser: User | null;  // alias for user; consumed by chat/marketplace components
   isAuthenticated: boolean;
+  /** False until the stored session (and its profile) has been checked on load. */
+  authReady: boolean;
   login: (username: string, password: string) => Promise<{ success: boolean; message: string; needsVerification?: boolean }>;
   register: (data: RegisterData) => Promise<{ success: boolean; message: string; needsVerification?: boolean }>;
   verifyEmailCode: (email: string, code: string) => Promise<{ success: boolean; message: string }>;
@@ -46,13 +48,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
   // Load user on mount
   useEffect(() => {
-    // Get current session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) fetchProfile(session.user.id);
-    });
+    // Get current session. Routing waits for authReady so a refresh on a
+    // deep link (e.g. #/admin/reports) isn't bounced to the login page
+    // while the stored session is still being restored.
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
+        if (session) await fetchProfile(session.user.id);
+      })
+      .catch((err) => console.error('[auth] session restore failed', err))
+      .finally(() => setAuthReady(true));
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -221,7 +229,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, currentUser: user, isAuthenticated: !!user, login, register, verifyEmailCode, resendVerificationCode, logout, updateUser, refreshUser }}>
+    <AuthContext.Provider value={{ user, currentUser: user, isAuthenticated: !!user, authReady, login, register, verifyEmailCode, resendVerificationCode, logout, updateUser, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

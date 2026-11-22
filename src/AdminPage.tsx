@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getAvatarColor, getAnonymousName } from './utils/anonymousName';
 import { NavigationBar } from './components/NavigationBar';
 import { Button } from './components/ui/button';
@@ -9,6 +9,8 @@ import { getPendingUsers, approveUser, rejectUser } from './utils/authContext';
 import { supabase } from './utils/supabaseClient';
 import { toast } from 'sonner@2.0.3';
 import { AdminReportsPanel } from './components/AdminReportsPanel';
+import { AdminBlockingPanel } from './components/AdminBlockingPanel';
+import { fetchReportCounts, type ReportStatus } from './utils/reports';
 import {
   Users,
   MessageSquare,
@@ -24,7 +26,17 @@ import {
   DollarSign,
   Eye,
   Flag,
+  Ban,
 } from 'lucide-react';
+
+const ADMIN_TABS = ['reports', 'blocking', 'approvals', 'posts', 'listings'] as const;
+type AdminTab = (typeof ADMIN_TABS)[number];
+
+// "#/admin/blocking" -> "blocking"; anything else falls back to Reports.
+function tabFromHash(): AdminTab {
+  const sub = window.location.hash.replace(/^#\/?/, '').split('/')[1] as AdminTab | undefined;
+  return sub && (ADMIN_TABS as readonly string[]).includes(sub) ? sub : 'reports';
+}
 
 interface Stats {
   approved: number;
@@ -34,7 +46,7 @@ interface Stats {
 }
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState('approvals');
+  const [activeTab, setActiveTabState] = useState<AdminTab>(tabFromHash);
   const [pendingUsers, setPendingUsers] = useState<any[]>([]);
   const [stats, setStats] = useState<Stats>({ approved: 0, pending: 0, posts: 0, listings: 0 });
   const [loading, setLoading] = useState(true);
@@ -42,10 +54,32 @@ export default function AdminPage() {
   const [allListings, setAllListings] = useState<any[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; type: 'post' | 'listing' } | null>(null);
   const [revealedAuthors, setRevealedAuthors] = useState<Record<string, string>>({});
-  const [pendingReports, setPendingReports] = useState<number | null>(null);
+  // Open reports (pending + under review) for the tab badge. null = unknown
+  // (e.g. migrations not applied yet) — the badge is simply left off.
+  const [openReports, setOpenReports] = useState<number | null>(null);
+
+  // Each tab has its own URL so it can be linked to and survives a refresh.
+  // replaceState: switching tabs shouldn't pile up back-button entries.
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab as AdminTab);
+    window.history.replaceState(null, '', `#/admin/${tab}`);
+  };
+
+  useEffect(() => {
+    const onHash = () => setActiveTabState(tabFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   useEffect(() => {
     Promise.all([loadPendingUsers(), loadStats(), loadAllPosts(), loadAllListings()]).finally(() => setLoading(false));
+    fetchReportCounts()
+      .then((c) => setOpenReports(c.pending + c.under_review))
+      .catch(() => setOpenReports(null));
+  }, []);
+
+  const handleReportCounts = useCallback((c: Record<ReportStatus, number>) => {
+    setOpenReports(c.pending + c.under_review);
   }, []);
 
   const loadPendingUsers = async () => {
@@ -160,8 +194,8 @@ export default function AdminPage() {
           {/* Hidden on mobile — NavigationBar already shows "Admin" as the page
               title there. Desktop's nav doesn't show a title, so it keeps this
               heading. */}
-          <h1 className="hidden md:block text-2xl font-bold font-[Bayon] mb-1">Admin Panel</h1>
-          <p className="text-[#666] text-sm font-[Roboto]">Manage users and platform content</p>
+          <h1 className="hidden md:block text-2xl font-bold font-[Bayon] mb-1">Admin Dashboard</h1>
+          <p className="text-[#666] text-sm font-[Roboto]">Reports, blocking, member approvals and content</p>
         </div>
 
         {/* Stats */}
@@ -185,34 +219,29 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full bg-transparent border-0 p-0 h-auto justify-start gap-8 mb-6 border-b border-[#f0f0f0] overflow-x-auto overflow-y-hidden">
-            <TabsTrigger
-              value="approvals"
-              className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
-            >
-              <BadgeCheck className="w-4 h-4" />
-              Pending Approvals ({stats.pending})
+          <TabsList className="w-full bg-transparent border-0 p-0 h-auto justify-start gap-6 sm:gap-8 mb-6 border-b border-[#f0f0f0] overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <TabsTrigger value="reports" className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2 shrink-0 whitespace-nowrap">
+              <Flag className="w-4 h-4" />
+              Reports
+              {openReports ? (
+                <span className="ml-0.5 min-w-5 h-5 px-1.5 rounded-full bg-[#dc2626] text-white text-[11px] leading-5 text-center">{openReports}</span>
+              ) : null}
             </TabsTrigger>
-            <TabsTrigger
-              value="posts"
-              className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
-            >
+            <TabsTrigger value="blocking" className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2 shrink-0 whitespace-nowrap">
+              <Ban className="w-4 h-4" />
+              Blocking
+            </TabsTrigger>
+            <TabsTrigger value="approvals" className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2 shrink-0 whitespace-nowrap">
+              <BadgeCheck className="w-4 h-4" />
+              Approvals ({stats.pending})
+            </TabsTrigger>
+            <TabsTrigger value="posts" className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2 shrink-0 whitespace-nowrap">
               <MessageSquare className="w-4 h-4" />
               Posts ({stats.posts})
             </TabsTrigger>
-            <TabsTrigger
-              value="listings"
-              className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
-            >
+            <TabsTrigger value="listings" className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2 shrink-0 whitespace-nowrap">
               <ShoppingBag className="w-4 h-4" />
               Listings ({stats.listings})
-            </TabsTrigger>
-            <TabsTrigger
-              value="reports"
-              className="bg-transparent border-0 rounded-none border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:bg-transparent px-0 pb-3 data-[state=active]:shadow-none font-[Roboto] gap-2"
-            >
-              <Flag className="w-4 h-4" />
-              Reports{pendingReports ? ` (${pendingReports})` : ''}
             </TabsTrigger>
           </TabsList>
 
@@ -404,7 +433,7 @@ export default function AdminPage() {
           </TabsContent>
           <TabsContent value="reports">
             <AdminReportsPanel
-              onPendingCountChange={setPendingReports}
+              onCountsChange={handleReportCounts}
               onContentChanged={(type) => {
                 // Only the Posts and Listings tabs mirror reportable content.
                 if (type === 'post') loadAllPosts();
@@ -412,6 +441,10 @@ export default function AdminPage() {
                 loadStats();
               }}
             />
+          </TabsContent>
+
+          <TabsContent value="blocking">
+            <AdminBlockingPanel onOpenReports={() => setActiveTab('reports')} />
           </TabsContent>
         </Tabs>
       </main>
