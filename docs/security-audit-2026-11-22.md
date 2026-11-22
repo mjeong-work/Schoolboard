@@ -83,6 +83,40 @@ select (select count(*) from posts where image_url like 'data:%') posts,
           or exists (select 1 from unnest(images) i where i like 'data:%')) items;
 ```
 
+### Results from prod (run by the owner, 2026-11-22)
+
+- **Migration history**:
+  - Recorded: everything up to `20260811000002`, then the Oct 24 batch under its old names (`20260829000000_marketplace_hardening` … `20261024000100`).
+  - **Not recorded**: the repo's `20260829000000_add_admin_author_reveal_rpc`, `20260829000001`, and `20260905000000..000002`. The reveal RPCs exist on prod, so at least some of these were applied by hand.
+  - Not recorded, as expected: `20261120*` and `20261121*`.
+- **Policies**:
+  - Finding 3 is **confirmed**: `authenticated users can view all profiles` is live.
+  - Finding 2 is explained by these policies, all `USING (true)` for `public`:
+    - `Anyone can view posts`
+    - `Anyone can view (post) comments`
+    - `Anyone can view (post) likes`
+    - `Authenticated users can read marketplace items` (it is `true`, despite the name)
+    - `Authenticated users can read saves`
+  - Duplicate policies sit on `profiles` (2× update own, 3× insert own). The update ones are covered by the hotfix trigger.
+  - Since the blocking and hiding policies are RESTRICTIVE, the permissive duplicates don't bypass them. Re-tested locally with prod's exact policy set: suite 101/101, hotfix probe as above.
+- **Admins**: 4 accounts (2026-04-10, 2026-07-29, 2026-08-22 13:00, 2026-08-22 13:10). The owner still needs to confirm that each one is legitimate.
+- **base64 images**: posts 0, events 1, items 0. `000300` now backs up the event image before clearing it.
+
+Still to check (read-only):
+
+```sql
+-- INSERT policies: is WITH CHECK actually tied to auth.uid()? (impersonation)
+select tablename, policyname, roles, with_check from pg_policies
+where schemaname = 'public' and cmd in ('INSERT','UPDATE')
+  and tablename in ('profiles','posts','post_comments','post_likes','marketplace_items','marketplace_saves')
+order by 1, 2;
+-- were the 20260905 chat-name anonymizations applied? (0 = yes)
+select (select count(*) from conversation_participants cp join conversations c on c.id = cp.conversation_id
+         where c.context_type in ('marketplace','event') and cp.user_name not like 'Anonymous%') participants,
+       (select count(*) from messages m join conversations c on c.id = m.conversation_id
+         where c.context_type in ('marketplace','event') and m.sender_name not like 'Anonymous%') messages;
+```
+
 ## Test environment
 
 There is no Docker on this machine, so the local Supabase stack (`supabase start`) is unavailable. Recommended setup:
@@ -111,8 +145,13 @@ Each production step needs explicit approval.
 4. Review the admin list from step 0 and demote any account that shouldn't be admin (approval).
 5. Decide on `get_email_by_username`: email-only login, or a server-side username login (Edge Function) that never returns the email.
 6. Reconcile migration history on prod (approval):
-   - `migration repair --status applied 20261120000000`
-   - `migration repair --status reverted` for the old Oct 24 versions, then re-run `20261121000000..000400`. They are idempotent, and `000300` now backs up first.
-   - Watch the `20260829000000` collision: keep it as applied for the reveal RPC.
+   - After the hotfix from step 3: `supabase migration repair --status applied 20261120000000`.
+   - `supabase migration repair --status reverted 20260829000000 20260829000100 20260830000000 20261024000000 20261024000100` removes only the old-name records, not the schema.
+   - `supabase db push --dry-run` should then list:
+     - `20260829000000` (reveal RPC, `CREATE OR REPLACE`)
+     - `20260829000001` (`DROP` + `CREATE POLICY`)
+     - `20260905000000..000002`: these overwrite chat labels with "Anonymous …", which is intended. Run the check query first.
+     - `20261121000000..000700`
+   - All of them are written to be re-runnable (`CREATE OR REPLACE`, `DROP … IF EXISTS`, idempotent `UPDATE`). Only the `20261120`/`20261121` files were actually re-run over a prod-like schema.
 7. Staging: apply `000500`–`000700` and run the reporting/blocking/admin checklist in `docs/reporting-blocking-mvp.md` with User A, User B and Admin.
 8. Prod (approval): apply `000500`–`000700`, then deploy the frontend (push main → Vercel). The frontend shows "not available yet" until the migrations exist, so the order is DB first, frontend second.
