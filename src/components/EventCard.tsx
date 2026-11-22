@@ -15,6 +15,7 @@ import {
 import { EventLocationMap } from './EventLocationMap';
 import { EditEventDialog } from './EditEventDialog';
 import { CommentsSheet } from './CommentsSheet';
+import { useContentSafety } from './ContentSafety';
 
 interface EventCardProps {
   event: Event;
@@ -33,6 +34,7 @@ export function EventCard({ event }: EventCardProps) {
     hasRSVPed: hasUserRSVPed
   } = useData();
   const { getOrCreateConversation } = useChat();
+  const safety = useContentSafety();
 
   const [showComments, setShowComments] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -134,9 +136,9 @@ export function EventCard({ event }: EventCardProps) {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <DropdownMenu>
+              <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                  <button className="p-1 hover:bg-black/5 rounded-full transition-colors">
+                  <button className="p-1 hover:bg-black/5 rounded-full transition-colors" aria-label="Event options">
                     <MoreHorizontal className="w-4 h-4 text-[#999]" strokeWidth={2} />
                   </button>
                 </DropdownMenuTrigger>
@@ -157,7 +159,22 @@ export function EventCard({ event }: EventCardProps) {
                       Delete event
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem className="cursor-pointer">Report event</DropdownMenuItem>
+                  {user && !isOwnEvent && (
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() => safety.openReport({ type: 'event', id: event.id, authorId: event.authorId, alias: event.author })}
+                    >
+                      Report event
+                    </DropdownMenuItem>
+                  )}
+                  {user && !isOwnEvent && (
+                    <DropdownMenuItem
+                      className="cursor-pointer text-red-600 focus:text-red-600"
+                      onClick={() => safety.openBlock({ type: 'event', id: event.id, authorId: event.authorId, alias: event.author })}
+                    >
+                      Block host
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem className="cursor-pointer">Save event</DropdownMenuItem>
                   <DropdownMenuItem className="cursor-pointer">Share event</DropdownMenuItem>
                 </DropdownMenuContent>
@@ -276,6 +293,7 @@ export function EventCard({ event }: EventCardProps) {
         isAdmin={isAdmin}
         onAddComment={handleAddComment}
         onDeleteComment={handleDeleteComment}
+        commentType="event_comment"
       />
     </div>
 
@@ -295,6 +313,7 @@ export function EventCard({ event }: EventCardProps) {
         }}
       />
     )}
+    {safety.dialogs}
     </>
   );
 }

@@ -14,6 +14,7 @@ import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { toast } from 'sonner@2.0.3';
 import { EditPostDialog } from './EditPostDialog';
 import { CommentsSheet } from './CommentsSheet';
+import { useContentSafety } from './ContentSafety';
 
 interface PostCardProps {
   post: Post;
@@ -35,6 +36,7 @@ export function PostCard({ post }: PostCardProps) {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const safety = useContentSafety();
   const isLiked = isPostLiked(post.id);
   const isOwnPost = user?.id === post.authorId;
   const isAdmin = user?.role === 'Administrator';
@@ -144,9 +146,23 @@ export function PostCard({ post }: PostCardProps) {
                       Delete post
                     </DropdownMenuItem>
                   )}
-                  {/* Reporting is specced but not built yet — say so rather than
-                      silently doing nothing (see Week 1 reporting spec). */}
-                  <DropdownMenuItem className="cursor-pointer" onClick={() => toast("Reporting isn't available yet.")}>Report post</DropdownMenuItem>
+                  {/* Your own post can't be reported or blocked (the server rejects it too). */}
+                  {user && !isOwnPost && (
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() => safety.openReport({ type: 'post', id: post.id, authorId: post.authorId, alias: post.author })}
+                    >
+                      Report post
+                    </DropdownMenuItem>
+                  )}
+                  {user && !isOwnPost && (
+                    <DropdownMenuItem
+                      className="cursor-pointer text-red-600 focus:text-red-600"
+                      onClick={() => safety.openBlock({ type: 'post', id: post.id, authorId: post.authorId, alias: post.author })}
+                    >
+                      Block author
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem className="cursor-pointer" onClick={() => toast("Sharing isn't available yet.")}>Share post</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -211,6 +227,7 @@ export function PostCard({ post }: PostCardProps) {
         isAdmin={isAdmin}
         onAddComment={handleAddComment}
         onDeleteComment={handleDeleteComment}
+        commentType="post_comment"
       />
 
       <ConfirmDeleteDialog
@@ -219,6 +236,8 @@ export function PostCard({ post }: PostCardProps) {
         title="Delete this post?"
         onConfirm={handleDeletePost}
       />
+
+      {safety.dialogs}
 
       {isEditOpen && (
         <EditPostDialog

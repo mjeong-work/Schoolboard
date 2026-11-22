@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { useAuth } from './authContext';
 import { supabase } from './supabaseClient';
+import { toast } from 'sonner@2.0.3';
 
 export interface Message {
   id: string;
@@ -318,6 +319,13 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .then(({ error }) => {
         if (error) {
           console.error('[sendMessage] insert failed:', error.message);
+          // RLS rejects sends in a conversation where either side has blocked
+          // the other; without this the message would just vanish.
+          toast.error(
+            error.code === '42501'
+              ? 'You can’t send messages in this conversation.'
+              : 'Message failed to send. Please try again.'
+          );
           // Only roll back if the INSERT itself failed (message was never saved)
           setMessages((prev) => prev.filter((m) => m.id !== tempId));
           setConversations((prev) =>

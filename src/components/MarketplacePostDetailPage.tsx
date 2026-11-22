@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Eye, Heart, MessageCircle, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Eye, Heart, MessageCircle, MoreHorizontal, Pencil, Trash2, Flag, Ban } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -9,6 +9,7 @@ import {
 } from './ui/dropdown-menu';
 import { CommentsPanel } from './CommentsPanel';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
+import { useContentSafety } from './ContentSafety';
 import { MarketplacePostGallery, MarketplacePostBody, useMarketplaceItemView } from './MarketplacePostDetail';
 import { useMarketplaceItemActions } from '../utils/useMarketplaceItemActions';
 import { useBackableOverlay } from '../utils/useBackableOverlay';
@@ -40,6 +41,9 @@ export function MarketplacePostDetailPage({ item, onBack, onEdit }: MarketplaceP
   } = useMarketplaceItemActions(item);
 
   useMarketplaceItemView(item.id, true);
+  // Blocking the seller removes this listing, so leave the page first.
+  const safety = useContentSafety({ onBlocked: onBack });
+  const safetyTarget = { type: 'marketplace_item' as const, id: item.id, authorId: item.seller.id, alias: item.seller.name };
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   // This view covers the whole screen, so the feed behind it shouldn't
@@ -67,7 +71,10 @@ export function MarketplacePostDetailPage({ item, onBack, onEdit }: MarketplaceP
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-white flex flex-col font-[Roboto] animate-in fade-in slide-in-from-right-4 duration-200">
+    // z-50 matches the sticky NavigationBar; rendering after it puts this
+    // page on top (z-40 left the Back button and menu under the nav bar),
+    // while portaled menus and dialogs (also z-50) still layer above it.
+    <div className="fixed inset-0 z-50 bg-white flex flex-col font-[Roboto] animate-in fade-in slide-in-from-right-4 duration-200">
       {/* Top bar */}
       <div className="flex items-center gap-1 px-2 py-2.5 border-b border-[#f0f0f0] shrink-0">
         <button
@@ -79,7 +86,7 @@ export function MarketplacePostDetailPage({ item, onBack, onEdit }: MarketplaceP
           <ArrowLeft className="w-5 h-5 text-[#111]" />
         </button>
         <span className="flex-1 min-w-0 font-semibold text-[#111] truncate">{item.title}</span>
-        {(isOwnItem || isAdmin) && (
+        {user && (
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <button className="p-2 text-[#999] hover:text-black hover:bg-black/5 rounded-full transition-colors shrink-0" aria-label="Post options">
@@ -93,13 +100,33 @@ export function MarketplacePostDetailPage({ item, onBack, onEdit }: MarketplaceP
                   Edit item
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem
-                className="cursor-pointer text-red-600 focus:text-red-600"
-                onClick={() => setIsDeleteConfirmOpen(true)}
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete item
-              </DropdownMenuItem>
+              {(isOwnItem || isAdmin) && (
+                <DropdownMenuItem
+                  className="cursor-pointer text-red-600 focus:text-red-600"
+                  onClick={() => setIsDeleteConfirmOpen(true)}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete item
+                </DropdownMenuItem>
+              )}
+              {!isOwnItem && (
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={() => safety.openReport(safetyTarget)}
+                >
+                  <Flag className="w-4 h-4 mr-2" />
+                  Report listing
+                </DropdownMenuItem>
+              )}
+              {!isOwnItem && (
+                <DropdownMenuItem
+                  className="cursor-pointer text-red-600 focus:text-red-600"
+                  onClick={() => safety.openBlock(safetyTarget)}
+                >
+                  <Ban className="w-4 h-4 mr-2" />
+                  Block seller
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -111,6 +138,8 @@ export function MarketplacePostDetailPage({ item, onBack, onEdit }: MarketplaceP
         title="Delete this listing?"
         onConfirm={handleDeleteAndBack}
       />
+
+      {safety.dialogs}
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto">
@@ -162,6 +191,7 @@ export function MarketplacePostDetailPage({ item, onBack, onEdit }: MarketplaceP
               isAdmin={isAdmin}
               onAddComment={handleAddComment}
               onDeleteComment={handleDeleteComment}
+              commentType="marketplace_comment"
             />
           </div>
         </div>

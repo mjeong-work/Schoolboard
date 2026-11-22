@@ -6,6 +6,7 @@ import {
 } from './ui/drawer';
 import { CommentsPanel } from './CommentsPanel';
 import type { Comment } from '../utils/dataContext';
+import type { CommentContentType } from '../utils/reports';
 
 interface CommentsSheetProps {
   open: boolean;
@@ -16,6 +17,7 @@ interface CommentsSheetProps {
   isAdmin?: boolean;
   onAddComment: (text: string) => void | Promise<void>;
   onDeleteComment?: (commentId: string) => void | Promise<void>;
+  commentType?: CommentContentType;
 }
 
 // Mobile-only bottom sheet — slides up from the bottom of the screen.
@@ -30,6 +32,7 @@ export function CommentsSheet({
   isAdmin,
   onAddComment,
   onDeleteComment,
+  commentType,
 }: CommentsSheetProps) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -45,6 +48,7 @@ export function CommentsSheet({
           isAdmin={isAdmin}
           onAddComment={onAddComment}
           onDeleteComment={onDeleteComment}
+          commentType={commentType}
         />
       </DrawerContent>
     </Drawer>

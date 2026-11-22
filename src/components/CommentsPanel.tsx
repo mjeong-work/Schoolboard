@@ -10,6 +10,8 @@ import {
 } from './ui/dropdown-menu';
 import { toast } from 'sonner@2.0.3';
 import type { Comment } from '../utils/dataContext';
+import type { CommentContentType } from '../utils/reports';
+import { useContentSafety } from './ContentSafety';
 
 export interface CommentsPanelProps {
   comments: Comment[];
@@ -18,6 +20,8 @@ export interface CommentsPanelProps {
   isAdmin?: boolean;
   onAddComment: (text: string) => void | Promise<void>;
   onDeleteComment?: (commentId: string) => void | Promise<void>;
+  /** Which comments these are — enables Report / Block on other people's comments. */
+  commentType?: CommentContentType;
   /**
    * "sheet" — used inside the mobile bottom-sheet drawer (fills the
    * available height, composer pinned to the bottom of the drawer).
@@ -69,9 +73,11 @@ export function CommentsPanel({
   isAdmin,
   onAddComment,
   onDeleteComment,
+  commentType,
   variant = 'sheet',
   onClose,
 }: CommentsPanelProps) {
+  const safety = useContentSafety();
   const [commentText, setCommentText] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('relevant');
   const [submitting, setSubmitting] = useState(false);
@@ -148,6 +154,11 @@ export function CommentsPanel({
           <div className="space-y-4">
             {sortedComments.map((comment) => {
               const isOwnComment = currentUserId === comment.authorId;
+              const canDelete = (isOwnComment || isAdmin) && !!onDeleteComment;
+              const canFlag = !!commentType && !!currentUserId && !isOwnComment;
+              const safetyTarget = commentType
+                ? { type: commentType, id: comment.id, authorId: comment.authorId, alias: comment.author }
+                : null;
               return (
                 <div key={comment.id} className="flex gap-2.5">
                   <div
@@ -160,20 +171,38 @@ export function CommentsPanel({
                     <div className="bg-[#f5f5f5] rounded-2xl px-3 py-2">
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-sm font-semibold text-[#111]">{comment.author}</span>
-                        {(isOwnComment || isAdmin) && onDeleteComment && (
-                          <DropdownMenu>
+                        {(canDelete || canFlag) && (
+                          <DropdownMenu modal={false}>
                             <DropdownMenuTrigger asChild>
-                              <button className="p-1 -mr-1 -mt-0.5 hover:bg-black/5 rounded-full transition-colors shrink-0">
+                              <button
+                                className="p-1 -mr-1 -mt-0.5 hover:bg-black/5 rounded-full transition-colors shrink-0"
+                                aria-label="Comment options"
+                              >
                                 <MoreHorizontal className="w-3.5 h-3.5 text-[#999]" />
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                className="text-red-600 focus:text-red-600"
-                                onClick={() => onDeleteComment(comment.id)}
-                              >
-                                Delete
-                              </DropdownMenuItem>
+                              {canFlag && safetyTarget && (
+                                <DropdownMenuItem onClick={() => safety.openReport(safetyTarget)}>
+                                  Report comment
+                                </DropdownMenuItem>
+                              )}
+                              {canFlag && safetyTarget && (
+                                <DropdownMenuItem
+                                  className="text-red-600 focus:text-red-600"
+                                  onClick={() => safety.openBlock(safetyTarget)}
+                                >
+                                  Block author
+                                </DropdownMenuItem>
+                              )}
+                              {canDelete && (
+                                <DropdownMenuItem
+                                  className="text-red-600 focus:text-red-600"
+                                  onClick={() => onDeleteComment!(comment.id)}
+                                >
+                                  Delete
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}
@@ -252,6 +281,8 @@ export function CommentsPanel({
           </Button>
         </div>
       </div>
+
+      {safety.dialogs}
     </>
   );
 }

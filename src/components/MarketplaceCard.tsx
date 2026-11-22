@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Heart, Eye, MessageCircle, MessageSquare, Trash2, Pencil, MoreHorizontal, ChevronUp, MapPin } from 'lucide-react';
+import { Heart, Eye, MessageCircle, MessageSquare, Trash2, Pencil, MoreHorizontal, ChevronUp, MapPin, Flag, Ban } from 'lucide-react';
 import { Button } from './ui/button';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useMarketplaceItemActions } from '../utils/useMarketplaceItemActions';
@@ -13,6 +13,7 @@ import {
 import { CommentsSheet } from './CommentsSheet';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { CommentsPanel } from './CommentsPanel';
+import { useContentSafety } from './ContentSafety';
 import { MarketplacePostGallery, MarketplacePostBody, useMarketplaceItemView, formatPrice } from './MarketplacePostDetail';
 import { useIsMobile } from './ui/use-mobile';
 
@@ -45,6 +46,8 @@ export function MarketplaceCard({ item, onOpenDetail, onEdit }: MarketplaceCardP
     handleDeleteComment,
   } = useMarketplaceItemActions(item);
   const isMobile = useIsMobile();
+  const safety = useContentSafety();
+  const safetyTarget = { type: 'marketplace_item' as const, id: item.id, authorId: item.seller.id, alias: item.seller.name };
 
   const [isCommentsOpen, setIsCommentsOpen] = useState(false); // mobile bottom sheet only
   const [desktopView, setDesktopView] = useState<DesktopView>('compact');
@@ -152,7 +155,7 @@ export function MarketplaceCard({ item, onOpenDetail, onEdit }: MarketplaceCardP
             >
               {item.title}
             </h3>
-            {(isOwnItem || isAdmin) && (
+            {user && (
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -173,13 +176,33 @@ export function MarketplaceCard({ item, onOpenDetail, onEdit }: MarketplaceCardP
                       Edit item
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem
-                    className="cursor-pointer text-red-600 focus:text-red-600"
-                    onClick={() => setIsDeleteConfirmOpen(true)}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete item
-                  </DropdownMenuItem>
+                  {(isOwnItem || isAdmin) && (
+                    <DropdownMenuItem
+                      className="cursor-pointer text-red-600 focus:text-red-600"
+                      onClick={() => setIsDeleteConfirmOpen(true)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete item
+                    </DropdownMenuItem>
+                  )}
+                  {!isOwnItem && (
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={(e) => { e.stopPropagation(); safety.openReport(safetyTarget); }}
+                    >
+                      <Flag className="w-4 h-4 mr-2" />
+                      Report listing
+                    </DropdownMenuItem>
+                  )}
+                  {!isOwnItem && (
+                    <DropdownMenuItem
+                      className="cursor-pointer text-red-600 focus:text-red-600"
+                      onClick={(e) => { e.stopPropagation(); safety.openBlock(safetyTarget); }}
+                    >
+                      <Ban className="w-4 h-4 mr-2" />
+                      Block seller
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -289,6 +312,7 @@ export function MarketplaceCard({ item, onOpenDetail, onEdit }: MarketplaceCardP
                 isAdmin={isAdmin}
                 onAddComment={handleAddComment}
                 onDeleteComment={handleDeleteComment}
+                commentType="marketplace_comment"
                 onClose={() => setDesktopView('expanded')}
               />
             </div>
@@ -316,8 +340,10 @@ export function MarketplaceCard({ item, onOpenDetail, onEdit }: MarketplaceCardP
           isAdmin={isAdmin}
           onAddComment={handleAddComment}
           onDeleteComment={handleDeleteComment}
+          commentType="marketplace_comment"
         />
       )}
+      {safety.dialogs}
     </article>
   );
 }

@@ -85,6 +85,10 @@ interface DataContextType {
   /** True when the initial load of posts/events/listings failed; retryLoad() tries again. */
   loadError: boolean;
   retryLoad: () => Promise<void>;
+  /** After a block: drop that author's posts, listings, events and comments locally. */
+  removeContentByAuthor: (authorId: string) => void;
+  /** After an unblock: quietly re-fetch so their content comes back (no loading state). */
+  refreshInBackground: () => Promise<void>;
   addPost: (post: Omit<Post, 'id' | 'date' | 'likes' | 'comments' | 'authorId' | 'author' | 'verified'>) => Promise<void>;
   updatePost: (postId: string, updates: { title?: string; content?: string; image?: string | null; category?: string }) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
@@ -884,8 +888,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // read a different slice) a brand-new object on every render — without
   // this, the whole component subtree under DataProvider re-renders on
   // every single like/comment/RSVP anywhere in the app.
+  // The server already hides a blocked author's rows (RLS); this just
+  // applies the same result to what's on screen without a refetch.
+  const removeContentByAuthor = (authorId: string) => {
+    const keepComments = <T extends { comments: Comment[] }>(row: T): T =>
+      row.comments.some((c) => c.authorId === authorId)
+        ? { ...row, comments: row.comments.filter((c) => c.authorId !== authorId) }
+        : row;
+    setPosts(prev => prev.filter(p => p.authorId !== authorId).map(keepComments));
+    setEvents(prev => prev.filter(e => e.authorId !== authorId).map(keepComments));
+    setMarketplaceItems(prev => prev.filter(i => i.seller.id !== authorId).map(keepComments));
+  };
+
+  const refreshInBackground = async () => {
+    await Promise.all([fetchPosts(), fetchEvents(), fetchMarketplaceItems()]);
+  };
+
   const value = useMemo<DataContextType>(() => ({
     posts, events, marketplaceItems, isLoading, loadError, retryLoad: loadAll,
+    removeContentByAuthor, refreshInBackground,
     addPost, updatePost, deletePost, toggleLikePost, addCommentToPost, deleteCommentFromPost, isPostLiked,
     addEvent, updateEvent, deleteEvent, toggleLikeEvent, addCommentToEvent, deleteCommentFromEvent, toggleRSVPEvent, isEventLiked, hasRSVPed,
     addMarketplaceItem, updateMarketplaceItem, deleteMarketplaceItem, toggleSaveItem, incrementItemViews, isItemSaved,

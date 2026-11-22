@@ -18,6 +18,7 @@ const MarketplacePage = lazy(() => import("./MarketplacePage"));
 const ProfilePage = lazy(() => import("./ProfilePage"));
 const AdminPage = lazy(() => import("./AdminPage"));
 const EditProfilePage = lazy(() => import("./EditProfilePage"));
+const BlockedUsersPage = lazy(() => import("./BlockedUsersPage"));
 const RegisterPage = lazy(() => import("./RegisterPage"));
 const ForgotPasswordPage = lazy(() => import("./ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("./ResetPasswordPage"));
@@ -40,6 +41,7 @@ type PageType =
   | "profile"
   | "admin"
   | "edit-profile"
+  | "blocked-users"
   | "messages"
   | "register"
   | "verify-email"
@@ -134,6 +136,8 @@ function AppRouter() {
         }
       } else if (hash === "edit-profile") {
         setCurrentPage("edit-profile");
+      } else if (hash === "blocked-users") {
+        setCurrentPage("blocked-users");
       } else if (hash === "messages") {
         setCurrentPage("messages");
       } else if (hash === "verification") {
@@ -208,6 +212,7 @@ function AppRouter() {
         {currentPage === "profile" && <ProfilePage />}
         {currentPage === "admin" && <AdminPage />}
         {currentPage === "edit-profile" && <EditProfilePage />}
+        {currentPage === "blocked-users" && <BlockedUsersPage />}
         {currentPage === "messages" && <MessagesPage />}
       </Suspense>
       <ChatManager />

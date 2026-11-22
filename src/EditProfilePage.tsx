@@ -7,7 +7,7 @@ import { Label } from './components/ui/label';
 import { Textarea } from './components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from './components/ui/avatar';
-import { Upload } from 'lucide-react';
+import { Upload, Ban, ChevronRight } from 'lucide-react';
 import { useAuth } from './utils/authContext';
 import { supabase } from './utils/supabaseClient';
 import { compressImage } from './utils/imageCompression';
@@ -266,6 +266,24 @@ export default function EditProfilePage() {
               {saving ? 'Saving…' : 'Save Changes'}
             </Button>
           </div>
+
+          {/* Privacy & safety */}
+          <Card className="p-6 border-t border-b border-l-0 border-r-0 border-[#f0f0f0] rounded-[0px]">
+            <h2 className="text-[#111] mb-1 font-[Roboto] font-bold">Privacy &amp; safety</h2>
+            <a
+              href="#/blocked-users"
+              className="flex items-center justify-between gap-3 -mx-2 px-2 py-3 rounded-lg hover:bg-[#fafafa] transition-colors font-[Roboto]"
+            >
+              <span className="flex items-center gap-3 min-w-0">
+                <Ban className="w-4 h-4 text-[#666] shrink-0" />
+                <span className="min-w-0">
+                  <span className="block text-sm text-[#111]">Blocked accounts</span>
+                  <span className="block text-xs text-[#888]">See and unblock people you’ve blocked</span>
+                </span>
+              </span>
+              <ChevronRight className="w-4 h-4 text-[#999] shrink-0" />
+            </a>
+          </Card>
         </div>
       </main>
     </div>
