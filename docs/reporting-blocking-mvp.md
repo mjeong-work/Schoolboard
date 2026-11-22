@@ -95,6 +95,14 @@ Client behaviour:
 
 ## Applying (needs approval — not done)
 
+**Production state (checked 2026-11-21 with read-only, zero-row anon requests):**
+- The Oct 24 batch is **already live** under its old version numbers (`20260829000000_marketplace_hardening` … `20261024000100`). The `images` and location columns, the storage buckets and the `_backup_20261024_*` tables all exist.
+- `hidden_at`, `reports` and `user_blocks` do not exist yet.
+- Consequences:
+  - The old `marketplace_hardening` probably installed the "authenticated users can view all profiles" policy. Run `select policyname from pg_policies where tablename = 'profiles';` in the SQL editor. If that policy is there, anonymity is currently broken.
+  - `_backup_20261024_*` (1 / 3 / 7 rows) were readable with the public anon key. `20261121000300` now locks them down.
+  - `supabase migration list` will likely show the old versions as remote-only. `db push` refuses until they are reconciled with `supabase migration repair` (e.g. `--status reverted` for the old versions). The new `20261121*` files are safe to re-run over the old ones: this was tested on a simulated production schema, and it also drops the profiles policy.
+
 1. Back up the production database first.
 2. Apply to a **staging** project:
    ```sh

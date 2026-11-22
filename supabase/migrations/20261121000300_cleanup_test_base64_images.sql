@@ -32,6 +32,19 @@ FROM public.marketplace_items
 WHERE image_url LIKE 'data:%'
    OR EXISTS (SELECT 1 FROM unnest(images) AS img WHERE img LIKE 'data:%');
 
+-- Backups live in public, which PostgREST exposes, and CREATE TABLE AS
+-- inherits the default anon/authenticated grants with RLS off — the first
+-- version of this migration left them readable by anyone holding the
+-- public anon key (author/seller ids + titles). Lock them down to the
+-- service role / SQL editor. Safe to re-run on a database that already
+-- has the tables.
+ALTER TABLE public._backup_20261024_posts_images ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public._backup_20261024_events_images ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public._backup_20261024_marketplace_items_images ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public._backup_20261024_posts_images FROM anon, authenticated;
+REVOKE ALL ON public._backup_20261024_events_images FROM anon, authenticated;
+REVOKE ALL ON public._backup_20261024_marketplace_items_images FROM anon, authenticated;
+
 -- 2. Cleanup ---------------------------------------------------------
 UPDATE public.posts
 SET image_url = NULL
