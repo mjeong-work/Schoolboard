@@ -120,6 +120,15 @@ select (select count(*) from conversation_participants cp join conversations c o
          where c.context_type in ('marketplace','event') and m.sender_name not like 'Anonymous%') messages;
 ```
 
+### Applied to prod — 2026-11-22
+
+- Backup taken first: `pg_dump` schema and data, stored in `C:\Users\mjeon\sb_backup` (outside the repo). It covers 19 tables, 64 policies, and data including 17 `auth.users` rows.
+- The owner ran `20261120000000_security_hotfix.sql` in the SQL editor. Result: "Success. No rows returned".
+- Anon probe afterwards:
+  - All 18 public tables and all 3 backup tables now return 401.
+  - The login RPC still works.
+- Not yet recorded in `schema_migrations`. Record it with `migration repair --status applied 20261120000000` during step 6.
+
 ## Test environment
 
 There is no Docker on this machine, so the local Supabase stack (`supabase start`) is unavailable. Recommended setup:
