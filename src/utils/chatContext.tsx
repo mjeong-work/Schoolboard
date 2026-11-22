@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { useAuth } from './authContext';
-import { supabase } from './supabaseClient';
+import { supabase, dbSchema } from './supabaseClient';
 import { toast } from 'sonner@2.0.3';
 
 export interface Message {
@@ -150,7 +150,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .channel(`chat:${userId}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages' },
+        { event: 'INSERT', schema: dbSchema, table: 'messages' },
         (payload) => {
           const raw = payload.new as Record<string, any>;
 

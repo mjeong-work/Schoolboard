@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { supabase, isStagingSchema } from './supabaseClient';
 import { compressImage } from './imageCompression';
 
 // Single source of truth for "how do we handle a user-uploaded photo",
@@ -44,12 +44,23 @@ export function validateImageFile(file: File, kind: ImageKind): void {
 }
 
 /**
+ * Storage buckets are shared with production even on the staging schema,
+ * so staging never writes files.
+ */
+export function assertUploadsAllowed() {
+  if (isStagingSchema) {
+    throw new ImageUploadError('Photo uploads are turned off in staging (Storage is shared with production).');
+  }
+}
+
+/**
  * Validate, compress, and upload one image to the bucket for `kind`,
  * returning its public URL. Path is namespaced by `userId` so the
  * existing per-user Storage RLS policies (upload/update/delete only your
  * own objects) apply unchanged.
  */
 export async function uploadImage(file: File, kind: ImageKind, userId: string): Promise<string> {
+  assertUploadsAllowed();
   validateImageFile(file, kind);
   const config = IMAGE_UPLOAD_CONFIGS[kind];
 

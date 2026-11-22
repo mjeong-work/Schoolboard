@@ -58,6 +58,7 @@
       },
       "scripts": {
             "dev": "vite",
+            "dev:staging": "vite --mode staging",
             "build": "vite build",
             "test": "vitest run"
       }

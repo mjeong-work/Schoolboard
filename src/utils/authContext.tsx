@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from './supabaseClient';
+import { supabase, isStagingSchema } from './supabaseClient';
 
 export interface User {
   id: string;
@@ -25,7 +25,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   /** False until the stored session (and its profile) has been checked on load. */
   authReady: boolean;
-  login: (username: string, password: string) => Promise<{ success: boolean; message: string; needsVerification?: boolean }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; message: string; needsVerification?: boolean }>;
   register: (data: RegisterData) => Promise<{ success: boolean; message: string; needsVerification?: boolean }>;
   verifyEmailCode: (email: string, code: string) => Promise<{ success: boolean; message: string }>;
   resendVerificationCode: (email: string) => Promise<{ success: boolean; message: string }>;
@@ -137,10 +137,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const login = async (username: string, password: string) => {
-    // Look up email by username via RPC (runs as SECURITY DEFINER, no public table read needed)
-    const { data: email, error: rpcError } = await supabase.rpc('get_email_by_username', { p_username: username });
-    if (rpcError || !email) return { success: false, message: 'Username not found' };
+  const login = async (emailInput: string, password: string) => {
+    // Sign in by email. The old username -> email lookup RPC let anyone
+    // learn a member's email from their username, so it's no longer used.
+    const email = emailInput.trim().toLowerCase();
+    if (!email.includes('@')) {
+      return { success: false, message: 'Sign in with your email address. Usernames are no longer used to sign in.' };
+    }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
@@ -155,6 +158,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (data: RegisterData) => {
+    // Auth is shared with production even on the staging schema: a sign-up
+    // here would create a real account (and a production profile row).
+    if (isStagingSchema) {
+      return { success: false, message: 'Sign-up is turned off in staging. Use the prepared test accounts.' };
+    }
     // Pass profile fields via options.data so the DB trigger (handle_new_user)
     // can read them from raw_user_meta_data and insert the profile row itself.
     // This avoids the RLS violation that occurred when the frontend tried to

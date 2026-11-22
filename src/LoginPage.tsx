@@ -6,7 +6,7 @@ import { Label } from './components/ui/label';
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,7 +14,7 @@ export default function LoginPage() {
   const handleLogin = async () => {
     setError('');
     setLoading(true);
-    const result = await login(username, password);
+    const result = await login(email, password);
     setLoading(false);
     if (!result.success) {
       if (result.needsVerification) {
@@ -35,12 +35,14 @@ export default function LoginPage() {
 
         <div className="bg-white border border-[#e5e5e5] rounded-xl p-8 space-y-4">
           <div className="space-y-2">
-            <Label>Username</Label>
+            <Label htmlFor="login-email">Email</Label>
             <Input
-              type="text"
-              placeholder="your_username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              id="login-email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@school.edu"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
           </div>
 

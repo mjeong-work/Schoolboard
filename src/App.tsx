@@ -5,7 +5,7 @@ import { ChatProvider } from "./utils/chatContext";
 import LoginPage from "./LoginPage";
 import { ChatManager } from "./components/ChatManager";
 import { Toaster } from "./components/ui/sonner";
-import { isSupabaseConfigured } from "./utils/supabaseClient";
+import { isSupabaseConfigured, isStagingSchema, dbSchema } from "./utils/supabaseClient";
 
 // Route-level code splitting: everything below is only ever shown after
 // the user lands on a specific page, so none of it needs to be in the
@@ -263,6 +263,15 @@ VITE_SUPABASE_ANON_KEY=your-anon-key`}
       <DataProvider>
         <ChatProvider>
           <AppRouter />
+          {isStagingSchema && (
+            // Always visible so staging is never mistaken for the live site.
+            <div
+              role="status"
+              className="fixed z-[70] bottom-20 right-3 sm:bottom-3 pointer-events-none rounded-full bg-[#f59e0b] text-[#111] text-xs font-semibold px-3 py-1 shadow font-[Roboto]"
+            >
+              STAGING · schema "{dbSchema}" · test data only
+            </div>
+          )}
           <Toaster position="top-center" />
         </ChatProvider>
       </DataProvider>

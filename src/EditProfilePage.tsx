@@ -11,7 +11,7 @@ import { Upload, Ban, ChevronRight } from 'lucide-react';
 import { useAuth } from './utils/authContext';
 import { supabase } from './utils/supabaseClient';
 import { compressImage } from './utils/imageCompression';
-import { validateImageFile, ImageUploadError, IMAGE_UPLOAD_CONFIGS } from './utils/imageUpload';
+import { validateImageFile, assertUploadsAllowed, ImageUploadError, IMAGE_UPLOAD_CONFIGS } from './utils/imageUpload';
 import { toast } from 'sonner@2.0.3';
 
 const BIO_MAX_LENGTH = 240;
@@ -97,6 +97,13 @@ export default function EditProfilePage() {
     // nothing is written until Save succeeds.
     let avatarUrl = user.avatar || '';
     if (pendingAvatarBlob) {
+      try {
+        assertUploadsAllowed();
+      } catch (err) {
+        toast.error((err as Error).message);
+        setSaving(false);
+        return;
+      }
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(user.id, pendingAvatarBlob, { upsert: true, contentType: pendingAvatarMimeType });
