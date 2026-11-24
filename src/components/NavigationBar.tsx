@@ -4,6 +4,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from 
 import { useAuth } from '../utils/authContext';
 import { useChat } from '../utils/chatContext';
 import { PolicyFootnote } from '../policies/PolicyLinks';
+import { PolicyMenu } from '../policies/PolicyMenu';
 
 interface NavigationBarProps {
   activeTab?: 'community' | 'events' | 'marketplace' | 'admin' | 'profile' | 'messages';
@@ -85,6 +86,7 @@ export function NavigationBar({ activeTab = 'community' }: NavigationBarProps) {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-2">
+            <PolicyMenu />
             <a href="#messages" className="relative">
               <Button
                 variant="ghost"

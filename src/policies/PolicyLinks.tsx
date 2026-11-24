@@ -3,7 +3,7 @@ import { POLICIES } from './policyRoutes';
 
 // Policy pages open in a new tab from inside the app so an in-progress
 // post, listing or message isn't lost.
-const NEW_TAB = { target: '_blank', rel: 'noopener noreferrer' } as const;
+export const NEW_TAB = { target: '_blank', rel: 'noopener noreferrer' } as const;
 
 const DESCRIPTIONS: Record<(typeof POLICIES)[number]['slug'], string> = {
   terms: 'The rules for using Campus Connect',
@@ -22,6 +22,18 @@ export function PolicyFootnote({ className = '' }: { className?: string }) {
         </a>
       ))}
     </nav>
+  );
+}
+
+/** Thin footer under the signed-in pages; extra bottom room on mobile clears the floating post button. */
+export function PolicyFooter() {
+  return (
+    <footer className="border-t border-[#f0f0f0] bg-white">
+      <div className="max-w-[960px] mx-auto px-4 sm:px-6 pt-6 pb-24 sm:pb-8 flex flex-col items-center gap-2 text-center">
+        <PolicyFootnote className="justify-center" />
+        <p className="text-xs text-[#bbb] font-[Roboto]">© Campus Connect · Policies are drafts under review</p>
+      </div>
+    </footer>
   );
 }
 

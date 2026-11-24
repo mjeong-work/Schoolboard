@@ -7,6 +7,7 @@ import { ChatManager } from "./components/ChatManager";
 import { Toaster } from "./components/ui/sonner";
 import { isSupabaseConfigured, isStagingSchema, dbSchema } from "./utils/supabaseClient";
 import { getPolicySlug } from "./policies/policyRoutes";
+import { PolicyFooter } from "./policies/PolicyLinks";
 
 // Route-level code splitting: everything below is only ever shown after
 // the user lands on a specific page, so none of it needs to be in the
@@ -237,6 +238,8 @@ function AppRouter() {
         {currentPage === "blocked-users" && <BlockedUsersPage />}
         {currentPage === "messages" && <MessagesPage />}
       </Suspense>
+      {/* Messages has a fixed composer at the bottom on mobile. */}
+      {currentPage !== "messages" && <PolicyFooter />}
       <ChatManager />
     </>
   );
